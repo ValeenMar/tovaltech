@@ -1,4 +1,5 @@
-// api/host.json
+// api/host.json //
+
 {
   "version": "2.0",
   "logging": {

@@ -1,0 +1,32 @@
+# api/.gitignore  (agregar también en la raíz del repo si no existe)
+
+# ─── SECRETOS — NUNCA al repo ────────────────────────────────────────────────
+api/local.settings.json
+local.settings.json
+.env
+.env.*
+!.env.example
+
+# Archivos de precios descargados localmente para testing
+*.csv
+*.xlsx
+!**/example.*
+
+# ─── Dependencies ─────────────────────────────────────────────────────────────
+api/node_modules/
+node_modules/
+
+# ─── Build outputs ────────────────────────────────────────────────────────────
+dist/
+.output/
+
+# ─── Azure Functions local ────────────────────────────────────────────────────
+.python_packages/
+bin/
+obj/
+appsettings.local.json
+
+# ─── IDEs ─────────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
