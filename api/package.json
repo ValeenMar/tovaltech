@@ -1,0 +1,11 @@
+{
+  "name": "tovaltech-api",
+  "version": "1.0.0",
+  "description": "Azure Functions API for TovalTech",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {
+    "mssql": "^10.0.4"
+  }
+}
