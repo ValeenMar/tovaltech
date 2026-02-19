@@ -2,8 +2,8 @@ const fetch = require('node-fetch');
 const sql = require('mssql');
 const connectDB = require('../db');
 
-const ELIT_URL = 'https://clientes.elit.com.ar/v1/api/productos/csv?user_id=29574&token=m04mv68iwb9';
-const NEWBYTES_URL = 'https://api.nb.com.ar/v1/priceListCsv/c6caafe18ab17302a736431e21c9b5';
+const ELIT_URL = process.env.ELIT_API_URL;
+const NEWBYTES_URL = process.env.NEWBYTES_API_URL;
 const DOLAR_URL = 'https://dolarapi.com/v1/dolares/oficial';
 
 function parseNumber(value) {
@@ -275,15 +275,18 @@ function chunk(arr, size) {
 }
 
 module.exports = async function (context, req) {
-  try {
-    const dolarPayload = await fetchJson(DOLAR_URL);
-    const dolar = parseNumber(dolarPayload?.venta);
-    if (!dolar) throw new Error('No se pudo obtener cotización dólar (campo venta)');
+  // ── Validar variables de entorno ──────────────────────────────────────
+  if (!ELIT_URL || !NEWBYTES_URL) {
+    context.res = {
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+      body: { success: false, error: 'Faltan variables de entorno ELIT_API_URL o NEWBYTES_API_URL' },
+    };
+    return;
+  }
 
-    const [elitCsv, nbCsv] = await Promise.all([
-      fetchText(ELIT_URL),
-      fetchText(NEWBYTES_URL),
-    ]);
+  try {
+    // ... resto del código igual
 
     const elitObjs = rowsToObjects(parseCsv(elitCsv, ','));
     const nbObjs = rowsToObjects(parseCsv(nbCsv, ';'));

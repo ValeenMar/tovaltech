@@ -1,3 +1,7 @@
+// api/products/index.js
+// Endpoint público para la tienda + admin.
+// ?admin=1 → muestra todos los productos (sin filtro stock > 0) para el panel admin.
+
 const connectDB = require('../db');
 
 function toInt(v, fallback) {
@@ -10,11 +14,12 @@ module.exports = async function (context, req) {
   try {
     const pool = await connectDB();
 
+    const isAdmin   = req.query.admin === '1';
     const categoria = (req.query.categoria || '').trim();
     const marca     = (req.query.marca     || '').trim();
     const proveedor = (req.query.proveedor || '').trim();
     const buscar    = (req.query.buscar    || '').trim();
-    const limit     = clamp(toInt(req.query.limit,  24), 1, 200);
+    const limit     = clamp(toInt(req.query.limit,  24), 1, 500);
     const offset    = Math.max(0, toInt(req.query.offset, 0));
 
     // Leer markup global
@@ -24,12 +29,13 @@ module.exports = async function (context, req) {
     const globalMarkup = parseFloat(settingsRes.recordset?.[0]?.value ?? '0') / 100;
 
     // Filtros WHERE
-    const where = ['stock > 0'];
+    // Admin ve todo (incluso sin stock), tienda solo con stock > 0
+    const where = isAdmin ? [] : ['stock > 0'];
     if (categoria) where.push('category = @categoria');
     if (marca)     where.push('brand = @marca');
     if (proveedor) where.push('provider = @proveedor');
-    if (buscar)    where.push('(name LIKE @buscar OR brand LIKE @buscar OR sku LIKE @buscar)');
-    const whereSql = `WHERE ${where.join(' AND ')}`;
+    if (buscar)    where.push('(name LIKE @buscar OR brand LIKE @buscar OR sku LIKE @buscar OR category LIKE @buscar)');
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     // Contar total
     const countReq = pool.request();
@@ -37,8 +43,8 @@ module.exports = async function (context, req) {
     if (marca)     countReq.input('marca',     marca);
     if (proveedor) countReq.input('proveedor', proveedor);
     if (buscar)    countReq.input('buscar',    `%${buscar}%`);
-    const count  = await countReq.query(`SELECT COUNT(1) AS total FROM dbo.tovaltech_products ${whereSql}`);
-    const total  = count.recordset?.[0]?.total ?? 0;
+    const count = await countReq.query(`SELECT COUNT(1) AS total FROM dbo.tovaltech_products ${whereSql}`);
+    const total = count.recordset?.[0]?.total ?? 0;
 
     // Traer items
     const itemsReq = pool.request();
@@ -59,21 +65,20 @@ module.exports = async function (context, req) {
 
     // Aplicar markup a cada producto
     const products = (items.recordset || []).map(p => {
-      // Markup efectivo: usa el del producto si está seteado, sino el global
       const effectiveMarkup = p.markup_pct !== null && p.markup_pct !== undefined
         ? p.markup_pct / 100
         : globalMarkup;
 
-      const multiplier    = 1 + effectiveMarkup;
+      const multiplier     = 1 + effectiveMarkup;
       const price_ars_sale = Math.round((p.price_ars ?? 0) * multiplier);
       const price_usd_sale = Math.round((p.price_usd ?? 0) * multiplier * 100) / 100;
 
       return {
         ...p,
-        // Precios de venta (con markup)
-        price_ars:  price_ars_sale,
-        price_usd:  price_usd_sale,
-        // Precios de costo (para referencia en admin)
+        // Precios de venta (con markup aplicado)
+        price_ars: price_ars_sale,
+        price_usd: price_usd_sale,
+        // Precios de costo del mayorista (neto + IVA incluido)
         price_ars_cost: p.price_ars,
         price_usd_cost: p.price_usd,
         // Markup efectivo aplicado
@@ -92,7 +97,8 @@ module.exports = async function (context, req) {
     context.res = {
       status: 500,
       headers: { 'content-type': 'application/json' },
-      body: { error: 'products_failed', message: err.message },
+      // No exponemos el stack en producción
+      body: { error: 'products_failed', message: 'Error al obtener productos.' },
     };
   }
 };

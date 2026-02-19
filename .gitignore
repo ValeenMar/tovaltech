@@ -1,2 +1,14 @@
-node_modules
-node_modules
+# Dependencias
+node_modules/
+api/node_modules/
+
+# Build
+dist/
+
+# Variables de entorno locales (contienen credenciales)
+api/local.settings.json
+.env
+.env.local
+
+# Editor
+.vscode/
