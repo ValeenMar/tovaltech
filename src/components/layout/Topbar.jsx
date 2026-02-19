@@ -20,6 +20,8 @@ export default function Topbar() {
       </div>
       <div className="flex items-center gap-4">
         <input
+          id="admin-search"
+          name="admin-search"
           type="text"
           placeholder="🔍 Buscar..."
           className="hidden sm:block bg-gray-100 border border-gray-200 rounded-lg px-3.5 py-2 text-sm w-60 outline-none focus:border-azure-500 transition-colors"
