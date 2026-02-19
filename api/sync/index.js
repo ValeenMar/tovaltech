@@ -1,3 +1,4 @@
+const fetch = require('node-fetch');
 const connectDB = require('../db');
 const sql = require('mssql');
 
@@ -5,7 +6,7 @@ const sql = require('mssql');
 async function getDolarOficial() {
   const res = await fetch('https://dolarapi.com/v1/dolares/oficial');
   const data = await res.json();
-  return data.venta; // Ej: 1420
+  return data.venta;
 }
 
 // ─── PARSEAR CSV NEWBYTES (separador ;) ─────────────────────────────────────
@@ -14,7 +15,6 @@ function parseNewBytes(csvText) {
   const headers = lines[0].replace(/"/g, '').split(';').map(h => h.trim());
 
   return lines.slice(1).map(line => {
-    // Manejo de campos con saltos de línea dentro de comillas
     const cols = [];
     let current = '';
     let inQuote = false;
@@ -32,15 +32,15 @@ function parseNewBytes(csvText) {
     const stockRaw = parseInt(row['STOCK']) || 0;
 
     return {
-      sku:        row['CODIGO'],
-      name:       row['DETALLE'] || row['DETALLE_USUARIO'],
-      category:   row['CATEGORIA'],
-      brand:      row['MARCA'],
-      price_usd:  priceUsd,
-      stock:      stockRaw,
-      image_url:  row['IMAGEN'],
-      provider:   'newbytes',
-      warranty:   row['GARANTIA'] || '12 meses',
+      sku:       row['CODIGO'],
+      name:      row['DETALLE'] || row['DETALLE_USUARIO'],
+      category:  row['CATEGORIA'],
+      brand:     row['MARCA'],
+      price_usd: priceUsd,
+      stock:     stockRaw,
+      image_url: row['IMAGEN'],
+      provider:  'newbytes',
+      warranty:  row['GARANTIA'] || '12 meses',
     };
   }).filter(p => p.sku && p.name && p.price_usd > 0);
 }
@@ -51,7 +51,6 @@ function parseElit(csvText) {
   const headers = lines[0].split(',').map(h => h.trim());
 
   return lines.slice(1).map(line => {
-    // CSV estándar con comas, manejar campos entre comillas
     const cols = [];
     let current = '';
     let inQuote = false;
@@ -69,15 +68,15 @@ function parseElit(csvText) {
     const stockTotal = parseInt(row['stock_total']) || 0;
 
     return {
-      sku:        row['codigo_alfa'] || row['codigo_producto'],
-      name:       row['nombre'],
-      category:   row['categoria'],
-      brand:      row['marca'],
-      price_usd:  priceUsd,
-      stock:      stockTotal,
-      image_url:  row['imagen'],
-      provider:   'elit',
-      warranty:   row['garantia'] || '12 meses',
+      sku:       row['codigo_alfa'] || row['codigo_producto'],
+      name:      row['nombre'],
+      category:  row['categoria'],
+      brand:     row['marca'],
+      price_usd: priceUsd,
+      stock:     stockTotal,
+      image_url: row['imagen'],
+      provider:  'elit',
+      warranty:  row['garantia'] || '12 meses',
     };
   }).filter(p => p.sku && p.name && p.price_usd > 0);
 }
@@ -127,19 +126,17 @@ module.exports = async function (context, req) {
   try {
     const pool = await connectDB();
 
-    // 1. Obtener dólar oficial BNA
+    // 1. Dólar oficial BNA
     const dolarVenta = await getDolarOficial();
     results.dolar = dolarVenta;
     context.log(`Dólar oficial BNA: $${dolarVenta}`);
 
-    // 2. Obtener y procesar ELIT
+    // 2. ELIT
     try {
-      const elitRes = await fetch(
-        `https://clientes.elit.com.ar/v1/api/productos/csv?user_id=29574&token=m04mv68iwb9`
-      );
+      const elitRes = await fetch('https://clientes.elit.com.ar/v1/api/productos/csv?user_id=29574&token=m04mv68iwb9');
       const elitCsv = await elitRes.text();
       const elitProducts = parseElit(elitCsv);
-      context.log(`Elit: ${elitProducts.length} productos encontrados`);
+      context.log(`Elit: ${elitProducts.length} productos`);
 
       for (const product of elitProducts) {
         try {
@@ -153,14 +150,12 @@ module.exports = async function (context, req) {
       results.errors.push(`Error general ELIT: ${err.message}`);
     }
 
-    // 3. Obtener y procesar NEWBYTES
+    // 3. NEWBYTES
     try {
-      const nbRes = await fetch(
-        `https://api.nb.com.ar/v1/priceListCsv/c6caafe18ab17302a736431e21c9b5`
-      );
+      const nbRes = await fetch('https://api.nb.com.ar/v1/priceListCsv/c6caafe18ab17302a736431e21c9b5');
       const nbCsv = await nbRes.text();
       const nbProducts = parseNewBytes(nbCsv);
-      context.log(`NewBytes: ${nbProducts.length} productos encontrados`);
+      context.log(`NewBytes: ${nbProducts.length} productos`);
 
       for (const product of nbProducts) {
         try {
@@ -183,14 +178,19 @@ module.exports = async function (context, req) {
         newbytes_sincronizados: results.newbytes,
         total: results.elit + results.newbytes,
         errores: results.errors.length,
-        detalle_errores: results.errors.slice(0, 10) // primeros 10 errores
+        detalle_errores: results.errors.slice(0, 10)
       }
     };
 
   } catch (err) {
+    context.log.error('ERROR SYNC:', err);
     context.res = {
       status: 500,
-      body: { success: false, error: err.message }
+      body: {
+        success: false,
+        error: err.message,
+        stack: err.stack   // 👈 muestra el error exacto en el browser
+      }
     };
   }
 };
