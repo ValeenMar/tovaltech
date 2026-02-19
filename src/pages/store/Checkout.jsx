@@ -4,7 +4,7 @@ import { useCart } from '../../context/CartContext';
 import { getCartShipping, ZONES, FREE_SHIPPING_THRESHOLD } from '../../utils/shipping';
 
 // ── Configuración ────────────────────────────────────────────────────────────
-const WA_NUMBER = '5491XXXXXXXXXX'; // ← Reemplazá con tu número (código país sin +)
+const WA_NUMBER = '5491123413674';
 
 const fmtARS = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
