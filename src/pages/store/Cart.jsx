@@ -1,12 +1,10 @@
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import CartItem from '../../components/store/CartItem';
+import { FREE_SHIPPING_THRESHOLD } from '../../utils/shipping';
 
 const fmtARS = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
-
-// Umbral de envío gratis: ARS 50.000 (~50 USD)
-const FREE_SHIPPING_THRESHOLD = 50_000;
 
 export default function Cart() {
   const { cartItems, cartTotal, clearCart, cartCount } = useCart();
@@ -24,9 +22,6 @@ export default function Cart() {
     );
   }
 
-  const shipping = cartTotal >= FREE_SHIPPING_THRESHOLD ? 0 : 4_990;
-  const tax      = cartTotal * 0.21;  // IVA 21%
-  const total    = cartTotal + shipping + tax;
   const remaining = FREE_SHIPPING_THRESHOLD - cartTotal;
 
   return (
@@ -53,35 +48,36 @@ export default function Cart() {
 
           <div className="space-y-3 mb-6">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Subtotal ({cartCount} artículos)</span>
-              <span>{fmtARS(cartTotal)}</span>
+              <span className="text-gray-500">Subtotal ({cartCount} artículo{cartCount !== 1 ? 's' : ''})</span>
+              <span className="font-medium">{fmtARS(cartTotal)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Envío</span>
-              <span className={shipping === 0 ? 'text-green-600 font-medium' : ''}>
-                {shipping === 0 ? 'Gratis 🎉' : fmtARS(shipping)}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">IVA (21%)</span>
-              <span>{fmtARS(tax)}</span>
+              <span className="text-gray-400 italic text-xs mt-0.5">Se calcula al finalizar</span>
             </div>
             <hr />
             <div className="flex justify-between text-lg font-bold">
-              <span>Total</span>
-              <span className="text-blue-600">{fmtARS(total)}</span>
+              <span>Subtotal</span>
+              <span className="text-blue-600">{fmtARS(cartTotal)}</span>
             </div>
           </div>
 
-          {remaining > 0 && (
+          {remaining > 0 ? (
             <p className="text-xs text-orange-500 mb-4 bg-orange-50 p-2 rounded">
-              💡 Agregá {fmtARS(remaining)} más para envío gratis
+              💡 Agregá {fmtARS(remaining)} más para envío gratis en accesorios y periféricos
+            </p>
+          ) : (
+            <p className="text-xs text-green-600 mb-4 bg-green-50 p-2 rounded">
+              🎉 ¡Superaste el umbral para envío gratis en accesorios y periféricos!
             </p>
           )}
 
-          <button className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-            Proceder al Pago
-          </button>
+          <Link
+            to="/checkout"
+            className="block w-full text-center bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+          >
+            Finalizar compra →
+          </Link>
           <Link to="/productos" className="block text-center text-blue-600 text-sm mt-4 hover:underline">
             ← Seguir comprando
           </Link>
