@@ -6,6 +6,8 @@ import AdminLayout from './layouts/AdminLayout';
 import Home from './pages/store/Home';
 import StoreCatalog from './pages/store/StoreCatalog';
 import Cart from './pages/store/Cart';
+import Checkout from './pages/store/Checkout';
+import CheckoutResultado from './pages/store/CheckoutResultado';
 import Contact from './pages/store/Contact';
 
 export default function App() {
@@ -18,6 +20,8 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/productos" element={<StoreCatalog />} />
               <Route path="/carrito" element={<Cart />} />
+              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/checkout/resultado" element={<CheckoutResultado />} />
               <Route path="/contacto" element={<Contact />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />} />
