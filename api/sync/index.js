@@ -9,8 +9,17 @@ const DOLAR_URL = 'https://dolarapi.com/v1/dolares/oficial';
 function parseNumber(value) {
   if (value === null || value === undefined) return null;
   const s = String(value).trim();
-  if (!s) return null;
-  const normalized = s.replace(/\./g, '').replace(',', '.'); // tolerate 1.234,56
+  if (!s || s === '-') return null;
+
+  let normalized;
+  if (s.includes(',')) {
+    // Formato europeo: 1.234,56 -> quitar puntos de miles, reemplazar coma decimal
+    normalized = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    // Formato anglosajón: 145.11 -> usar directamente (NO quitar el punto)
+    normalized = s.replace(/[^0-9.]/g, '');
+  }
+
   const n = Number(normalized);
   return Number.isFinite(n) ? n : null;
 }
