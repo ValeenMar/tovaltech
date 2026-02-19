@@ -138,18 +138,20 @@ function mapElit(row, dolar) {
 }
 
 function mapNewBytes(row, dolar) {
-  const sku = normalizeText(row.CODIGO);
-  const name = normalizeText(row.DETALLE);
-  const category = normalizeText(row.CATEGORIA);
-  const brand = normalizeText(row.MARCA);
-  const priceArs = parseNumber(row['PRECIO FINAL']);
-  const stock = parseIntSafe(row.STOCK, 0);
+  const sku      = normalizeText(row.CODIGO);
+  // Preferir DETALLE_USUARIO si está disponible (nombre personalizado del cliente)
+  const name     = normalizeText(row.DETALLE_USUARIO || row.DETALLE);
+  // Preferir CATEGORIA_USUARIO si está disponible
+  const category = normalizeText(row.CATEGORIA_USUARIO || row.CATEGORIA);
+  const brand    = normalizeText(row.MARCA);
+  // Usar campos CON UTILIDAD que ya tienen markup aplicado
+  const priceUsd = parseNumber(row['PRECIO USD CON UTILIDAD'] || row['PRECIO FINAL']);
+  const priceArs = parseNumber(row['PRECIO PESOS CON UTILIDAD'] || row['PRECIO PESOS CON IVA']);
+  const stock    = parseIntSafe(row.STOCK, 0);
   const imageUrl = normalizeText(row.IMAGEN);
   const warranty = normalizeText(row.GARANTIA);
 
-  if (!sku || !name || !priceArs) return null;
-
-  const priceUsd = dolar > 0 ? priceArs / dolar : 0;
+  if (!sku || !name || !priceUsd) return null;
 
   return {
     sku,
@@ -157,7 +159,7 @@ function mapNewBytes(row, dolar) {
     category,
     brand,
     price_usd: round2(priceUsd),
-    price_ars: Math.max(0, Math.round(priceArs)),
+    price_ars: Math.max(0, Math.round(priceArs ?? priceUsd * dolar)),
     stock,
     image_url: imageUrl,
     provider: 'newbytes',
