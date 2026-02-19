@@ -1,4 +1,4 @@
-import { useAppContext } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
 import Modal from '../components/ui/Modal';
@@ -21,8 +21,8 @@ const pages = {
 };
 
 export default function AdminLayout() {
-  const { activePage } = useAppContext();
-  const Page = pages[activePage] || Dashboard;
+const { currentPage } = useApp();
+const Page = pages[currentPage] || Dashboard;
 
   return (
     <div className="flex h-screen bg-gray-100">
