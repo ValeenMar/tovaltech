@@ -24,9 +24,9 @@ export default function Footer() {
           <div>
             <h3 className="text-white font-semibold mb-3">Contacto</h3>
             <div className="flex flex-col gap-2 text-sm">
-              <span>📧 info@tovaltech.com</span>
-              <span>📞 +1 (555) 123-4567</span>
-              <span>📍 San José, Costa Rica</span>
+              <span>📧 valentin@toval-tech.com</span>
+              <span>📞 +54 11 2341-3674</span>
+              <span>📍 Buenos Aires, Argentina</span>
             </div>
           </div>
         </div>

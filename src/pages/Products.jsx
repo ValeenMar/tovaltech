@@ -103,8 +103,42 @@ function MarkupModal({ product, onClose }) {
 
 export default function Products() {
   const { products, openModal, removeProduct } = useApp()
-  const [search, setSearch]         = useState('')
-  const [markupModal, setMarkupModal] = useState(null)  // product object
+  const [search, setSearch]           = useState('')
+  const [markupModal, setMarkupModal]  = useState(null)
+  const [globalMarkup, setGlobalMarkup] = useState(null)   // null = no cargado
+  const [markupInput,  setMarkupInput]  = useState('')
+  const [savingMarkup, setSavingMarkup] = useState(false)
+  const [markupSaved,  setMarkupSaved]  = useState(false)
+  const [showMarkupBar, setShowMarkupBar] = useState(false)
+
+  // Cargar markup global al montar
+  useState(() => {
+    fetch('/api/settings')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const v = data?.global_markup_pct?.value ?? '30'
+        setGlobalMarkup(parseFloat(v))
+        setMarkupInput(v)
+      })
+      .catch(() => {})
+  }, [])
+
+  const handleSaveMarkup = async () => {
+    const pct = parseFloat(markupInput)
+    if (!Number.isFinite(pct) || pct < 0) return
+    setSavingMarkup(true)
+    try {
+      await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ global_markup_pct: pct }),
+      })
+      setGlobalMarkup(pct)
+      setMarkupSaved(true)
+      setTimeout(() => { setMarkupSaved(false); setShowMarkupBar(false) }, 2500)
+    } catch {}
+    setSavingMarkup(false)
+  }
 
   const filtered = products.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -114,17 +148,69 @@ export default function Products() {
 
   return (
     <>
-      <div className="flex justify-between items-center mb-5 flex-wrap gap-2">
+      <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
         <h3 className="font-semibold text-lg">🏷️ Catálogo de Productos
           <span className="ml-2 text-sm font-normal text-gray-400">({products.length} productos)</span>
         </h3>
-        <button
-          onClick={() => openModal('product')}
-          className="px-4 py-2 bg-azure-500 text-white rounded-lg text-sm font-semibold hover:bg-azure-600"
-        >
-          + Nuevo Producto
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Markup global rápido */}
+          <button
+            onClick={() => setShowMarkupBar(v => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium border transition-all
+              ${showMarkupBar
+                ? 'bg-blue-50 border-blue-300 text-blue-700'
+                : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'}`}
+          >
+            💹 Markup global
+            {globalMarkup !== null && (
+              <span className={`text-xs px-1.5 py-0.5 rounded font-bold
+                ${showMarkupBar ? 'bg-blue-200 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>
+                {globalMarkup}%
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => openModal('product')}
+            className="px-4 py-2 bg-azure-500 text-white rounded-lg text-sm font-semibold hover:bg-azure-600"
+          >
+            + Nuevo Producto
+          </button>
+        </div>
       </div>
+
+      {/* Barra markup inline */}
+      {showMarkupBar && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 mb-5 flex flex-wrap items-center gap-3">
+          <span className="text-sm text-blue-700 font-medium">Markup global sobre precio de costo:</span>
+          <div className="flex items-center gap-2 flex-1">
+            <input
+              id="products-global-markup"
+              name="products-global-markup"
+              type="range" min="0" max="200" step="1"
+              value={Math.min(200, parseFloat(markupInput) || 0)}
+              onChange={e => setMarkupInput(e.target.value)}
+              className="w-40 accent-blue-600"
+            />
+            <input
+              id="products-global-markup-num"
+              name="products-global-markup-num"
+              type="number" min="0" max="500" step="0.5"
+              value={markupInput}
+              onChange={e => setMarkupInput(e.target.value)}
+              className="w-16 px-2 py-1 border border-blue-200 rounded-lg text-sm text-center font-bold bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-sm font-bold text-blue-600">%</span>
+          </div>
+          <button
+            onClick={handleSaveMarkup}
+            disabled={savingMarkup}
+            className="px-4 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+          >
+            {savingMarkup ? '...' : 'Guardar'}
+          </button>
+          {markupSaved && <span className="text-sm text-green-600 font-medium">✅ Guardado</span>}
+        </div>
+      )}
 
       {/* Búsqueda */}
       <div className="mb-4">
