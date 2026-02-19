@@ -30,10 +30,9 @@ function ProductCard({ product, priority = false }) {
   return (
     <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden group flex flex-col">
       {/* Imagen / Emoji — height fija evita CLS */}
-      <div className="bg-gray-50 h-44 flex items-center justify-center overflow-hidden relative flex-shrink-0">
+      <div className="bg-white h-52 flex items-center justify-center overflow-hidden relative flex-shrink-0 border-b border-gray-100">
         {showImage ? (
           <>
-            {/* Skeleton mientras carga */}
             {!imgLoaded && (
               <div className="absolute inset-0 bg-gray-100 animate-pulse" />
             )}
@@ -43,17 +42,17 @@ function ProductCard({ product, priority = false }) {
               loading={priority ? 'eager' : 'lazy'}
               fetchpriority={priority ? 'high' : 'auto'}
               decoding="async"
-              width={200}
-              height={176}
+              width={240}
+              height={208}
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
-              className={`h-full w-full object-contain p-2 transition-opacity duration-300
-                group-hover:scale-105 transition-transform
+              className={`max-h-full max-w-full w-auto h-auto object-contain transition-opacity duration-300
+                group-hover:scale-105 transition-transform p-3
                 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
             />
           </>
         ) : (
-          <span className="text-5xl select-none">{product.emoji ?? '📦'}</span>
+          <span className="text-6xl select-none">{product.emoji ?? '📦'}</span>
         )}
 
         {/* Badge featured */}
@@ -88,12 +87,14 @@ function ProductCard({ product, priority = false }) {
         {/* Precios */}
         <div className="flex items-end justify-between mt-auto pt-2 border-t border-gray-50">
           <div>
-            <p className="text-lg font-bold text-gray-900 leading-tight">{fmtARS(product.price_ars)}</p>
-            <p className="text-xs text-gray-400">
-              {fmtUSD(product.price_usd)}
-              {dolarRate && (
-                <span className="ml-1 text-gray-300">· TC ${dolarRate.toLocaleString('es-AR')}</span>
-              )}
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-lg font-bold text-gray-900 leading-tight">{fmtARS(product.price_ars)}</p>
+              <span className="text-[10px] font-semibold text-green-600 bg-green-50 border border-green-100 px-1.5 py-0.5 rounded">
+                IVA inc.
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {fmtUSD(product.price_usd)} · Precio final
             </p>
           </div>
           <button
