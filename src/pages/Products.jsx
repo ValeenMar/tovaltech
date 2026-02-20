@@ -22,11 +22,15 @@ function useCategories() {
   return categories
 }
 
-// ── Modal: markup por producto individual ─────────────────────────────────────
+// ── Modal: editor de producto (markup + nombre + descripción) ─────────────────
 function MarkupModal({ product, globalMarkup, onClose }) {
-  const [value,  setValue]  = useState(product.markup_pct != null ? String(product.markup_pct) : '')
-  const [saving, setSaving] = useState(false)
-  const [error,  setError]  = useState(null)
+  const [tab,         setTab]         = useState('precio')
+  const [value,       setValue]       = useState(product.markup_pct != null ? String(product.markup_pct) : '')
+  const [name,        setName]        = useState(product.name || '')
+  const [description, setDescription] = useState(product.description || '')
+  const [saving,      setSaving]      = useState(false)
+  const [saved,       setSaved]       = useState(false)
+  const [error,       setError]       = useState(null)
 
   const effectiveMarkup = value === '' ? (globalMarkup ?? 0) : parseFloat(value) || 0
   const costArs = product.price_ars_cost ?? 0
@@ -35,68 +39,142 @@ function MarkupModal({ product, globalMarkup, onClose }) {
   const handleSave = async () => {
     const markup = value === '' ? null : parseFloat(value)
     if (markup !== null && (!Number.isFinite(markup) || markup < 0)) {
-      setError('Valor inválido'); return
+      setError('Valor de markup inválido'); return
     }
-    setSaving(true)
+    if (!name.trim()) {
+      setError('El nombre no puede estar vacío'); return
+    }
+    setSaving(true); setError(null)
     try {
       const res = await fetch(`/api/products/${product.id}/markup`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ markup_pct: markup }),
+        body: JSON.stringify({ markup_pct: markup, name: name.trim(), description: description.trim() || null }),
       })
       if (!res.ok) throw new Error()
-      onClose(true)
+      setSaved(true)
+      setTimeout(() => onClose(true), 900)
     } catch {
       setError('Error al guardar')
       setSaving(false)
     }
   }
 
+  const TABS = [
+    { id: 'precio',      label: '💹 Precio' },
+    { id: 'contenido',   label: '✏️ Nombre y descripción' },
+  ]
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
          onClick={() => onClose(false)}>
-      <div className="bg-white rounded-2xl p-6 w-[90%] max-w-sm shadow-2xl"
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg"
            onClick={e => e.stopPropagation()}>
-        <h3 className="font-bold text-gray-800 mb-1 text-sm">💹 Markup: {product.name}</h3>
-        <p className="text-xs text-gray-500 mb-4">
-          Vacío = usa el markup global ({globalMarkup ?? '—'}%).
-          Costo: <strong>{fmtARS(costArs)}</strong>
-        </p>
-        <div className="flex items-center gap-2 mb-4">
-          <input
-            type="number" min="0" max="500" step="0.5"
-            placeholder={`Global (${globalMarkup ?? 0}%)`}
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center
-                       font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <span className="text-lg font-bold text-gray-500">%</span>
+
+        {/* Header */}
+        <div className="px-6 pt-5 pb-3 border-b border-gray-100">
+          <p className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold mb-0.5">Editar producto</p>
+          <h3 className="font-bold text-gray-800 text-sm leading-snug line-clamp-2">{product.name}</h3>
         </div>
-        <div className="bg-gray-50 rounded-xl px-4 py-3 text-sm mb-4 space-y-1.5">
-          <div className="flex justify-between text-gray-500">
-            <span>Neto (costo)</span><span>{fmtARS(costArs)}</span>
-          </div>
-          <div className="flex justify-between text-gray-500">
-            <span>Markup {effectiveMarkup}%{value === '' ? ' (global)' : ''}</span>
-            <span className="text-orange-500">+{fmtARS(saleArs - costArs)}</span>
-          </div>
-          <div className="flex justify-between font-bold text-gray-800 border-t border-gray-100 pt-2">
-            <span>Precio de venta</span>
-            <span className="text-blue-600">{fmtARS(saleArs)}</span>
-          </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100 px-6">
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`py-3 mr-4 text-sm font-medium border-b-2 transition-all
+                ${tab === t.id
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-400 hover:text-gray-600'}`}>
+              {t.label}
+            </button>
+          ))}
         </div>
-        {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
-        <div className="flex gap-2">
-          <button onClick={() => onClose(false)}
-            className="flex-1 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50">
-            Cancelar
-          </button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold
-                       hover:bg-blue-700 disabled:opacity-50">
-            {saving ? '...' : 'Guardar'}
-          </button>
+
+        {/* Tab: Precio */}
+        {tab === 'precio' && (
+          <div className="px-6 py-5">
+            <p className="text-xs text-gray-500 mb-3">
+              Vacío = usa el markup global ({globalMarkup ?? '—'}%).
+              Costo: <strong>{fmtARS(costArs)}</strong>
+            </p>
+            <div className="flex items-center gap-2 mb-4">
+              <input
+                type="number" min="0" max="500" step="0.5"
+                placeholder={`Global (${globalMarkup ?? 0}%)`}
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center
+                           font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-lg font-bold text-gray-500">%</span>
+            </div>
+            <div className="bg-gray-50 rounded-xl px-4 py-3 text-sm space-y-1.5">
+              <div className="flex justify-between text-gray-500">
+                <span>Neto (costo)</span><span>{fmtARS(costArs)}</span>
+              </div>
+              <div className="flex justify-between text-gray-500">
+                <span>Markup {effectiveMarkup}%{value === '' ? ' (global)' : ''}</span>
+                <span className="text-orange-500">+{fmtARS(saleArs - costArs)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-gray-800 border-t border-gray-100 pt-2">
+                <span>Precio de venta</span>
+                <span className="text-blue-600">{fmtARS(saleArs)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab: Nombre y descripción */}
+        {tab === 'contenido' && (
+          <div className="px-6 py-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Título del producto</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
+                           focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Nombre del producto..."
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                Descripción
+                <span className="ml-2 font-normal text-gray-400">
+                  {description ? `${description.length} caracteres` : 'Sin descripción'}
+                </span>
+              </label>
+              <textarea
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                rows={7}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
+                           focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono"
+                placeholder="Ficha técnica o descripción del producto..."
+              />
+              <p className="text-[10px] text-gray-400 mt-1">
+                Podés editar o corregir lo que generó la IA. Formato libre, sin límite.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="px-6 pb-5">
+          {error  && <p className="text-xs text-red-500 mb-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+          {saved  && <p className="text-xs text-green-600 mb-3 bg-green-50 px-3 py-2 rounded-lg">✅ Guardado</p>}
+          <div className="flex gap-2">
+            <button onClick={() => onClose(false)}
+              className="flex-1 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50">
+              Cancelar
+            </button>
+            <button onClick={handleSave} disabled={saving || saved}
+              className="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold
+                         hover:bg-blue-700 disabled:opacity-50">
+              {saving ? 'Guardando...' : saved ? '✅ Guardado' : 'Guardar cambios'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

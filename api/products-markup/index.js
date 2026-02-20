@@ -1,7 +1,7 @@
 // api/products-markup/index.js
 // Ruta: POST /api/products/{id}/markup
-// Maneja markup individual Y toggle de visibilidad (active)
-// Body: { markup_pct: number|null, active: bool }  — cualquiera o ambos
+// Maneja markup individual, toggle de visibilidad, nombre y descripcion
+// Body: { markup_pct, active, featured, name, description } — cualquiera o todos
 
 const connectDB = require('../db');
 const headers = { 'content-type': 'application/json' };
@@ -13,34 +13,52 @@ module.exports = async function (context, req) {
     const body = req.body || {};
 
     if (!Number.isFinite(id)) {
-      context.res = { status: 400, headers, body: { error: 'ID inválido' } };
+      context.res = { status: 400, headers, body: { error: 'ID invalido' } };
       return;
     }
     const sets = [];
     const q    = pool.request().input('id', id);
 
-    // ── Markup ──────────────────────────────────────────────────────────────
+    // Markup
     if ('markup_pct' in body) {
       const markup = body.markup_pct === null || body.markup_pct === ''
         ? null : parseFloat(body.markup_pct);
       if (markup !== null && !Number.isFinite(markup)) {
-        context.res = { status: 400, headers, body: { error: 'markup_pct inválido' } };
+        context.res = { status: 400, headers, body: { error: 'markup_pct invalido' } };
         return;
       }
       q.input('markup', markup);
       sets.push('markup_pct = @markup');
     }
 
-    // ── Visibilidad (active) ────────────────────────────────────────────────
+    // Visibilidad
     if ('active' in body) {
       q.input('active', body.active ? 1 : 0);
       sets.push('active = @active');
     }
 
-    // ── Destacado (featured) ────────────────────────────────────────────────
+    // Destacado
     if ('featured' in body) {
       q.input('featured', body.featured ? 1 : 0);
       sets.push('featured = @featured');
+    }
+
+    // Nombre
+    if ('name' in body) {
+      const name = String(body.name || '').trim();
+      if (!name) {
+        context.res = { status: 400, headers, body: { error: 'El nombre no puede estar vacio' } };
+        return;
+      }
+      q.input('name', name);
+      sets.push('name = @name');
+    }
+
+    // Descripcion
+    if ('description' in body) {
+      const desc = body.description === null ? null : String(body.description).trim();
+      q.input('description', desc);
+      sets.push('description = @description');
     }
 
     if (!sets.length) {
