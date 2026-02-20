@@ -94,13 +94,10 @@ function ProductCard({ product, priority = false }) {
         {/* Precios + botón */}
         <div className="flex items-end justify-between mt-auto pt-2 border-t border-gray-50">
           <div>
-            <div className="flex items-baseline gap-1.5">
-              <p className="text-lg font-bold text-gray-900 leading-tight">{fmtARS(product.price_ars)}</p>
-              <span className="text-[10px] font-semibold text-green-600 bg-green-50 border border-green-100 px-1.5 py-0.5 rounded">
-                IVA inc.
-              </span>
-            </div>
-            <p className="text-xs text-gray-400 mt-0.5">{fmtUSD(product.price_usd)} · Precio final</p>
+            <p className="text-lg font-bold text-gray-900 leading-tight">{fmtARS(product.price_ars)}</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              Neto: {fmtARS(Math.round(product.price_ars / 1.21))}
+            </p>
           </div>
 
           <button
