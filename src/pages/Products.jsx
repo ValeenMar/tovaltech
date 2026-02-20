@@ -3,6 +3,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useAdminProducts } from '../hooks/useAdminProducts'
+import { useApp } from '../context/AppContext'
 
 const fmtUSD = (n) => n != null
   ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n) : '—'
@@ -398,12 +399,23 @@ function GridView({ products, globalMarkup, onMarkup, onReload }) {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function Products() {
+  const { adminCategoryFilter, setAdminCategoryFilter } = useApp()
+
   const [search,          setSearch]          = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter,  setCategoryFilter]  = useState('')
   const [markupModal,     setMarkupModal]     = useState(null)
   const [bulkModal,       setBulkModal]       = useState(null)
   const [vista,           setVista]           = useState('lista')
+
+  // Si venimos de Categorías con un filtro pre-seleccionado, aplicarlo una sola vez
+  useEffect(() => {
+    if (adminCategoryFilter) {
+      setCategoryFilter(adminCategoryFilter)
+      setAdminCategoryFilter('') // limpiar para la próxima vez
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const categories = useCategories()
 

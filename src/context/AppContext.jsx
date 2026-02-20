@@ -18,6 +18,8 @@ const modalReducer = (state, action) => {
 export function AppProvider({ children }) {
   const [currentPage, setCurrentPage] = useState('dashboard')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  // Filtro que Categories puede pasar a Products al navegar
+  const [adminCategoryFilter, setAdminCategoryFilter] = useState('')
   const [orders, setOrders] = useState(initOrders)
 
   // ── Productos: fuente única para admin Y tienda ──────────────────────────
@@ -91,6 +93,7 @@ export function AppProvider({ children }) {
   const value = {
     currentPage, setCurrentPage,
     sidebarOpen, setSidebarOpen,
+    adminCategoryFilter, setAdminCategoryFilter,
     products, addProduct, updateProduct, removeProduct,
     orders, addOrder,
     customers, addCustomer,

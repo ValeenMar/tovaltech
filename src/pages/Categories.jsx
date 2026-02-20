@@ -1,12 +1,9 @@
 // src/pages/Categories.jsx
 // Gestión de categorías: crear, editar nombre/markup, eliminar y asignar productos.
+// v2: markup editable inline en cada fila + botón "Ver productos" con filtro cross-page.
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-
-// ── Formatters ──────────────────────────────────────────────────────────────
-const fmtARS = (n) => n != null
-  ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
-  : '—'
+import { useApp } from '../context/AppContext'
 
 // ── Hook: carga categorías ──────────────────────────────────────────────────
 function useCategories() {
@@ -32,12 +29,125 @@ function useCategories() {
   return { categories, loading, error, reload: load }
 }
 
+// ── Markup editable inline ──────────────────────────────────────────────────
+// Badge que al click se convierte en input; guarda con Enter o blur.
+function InlineMarkupEditor({ cat, globalMarkup, onSaved }) {
+  const [editing, setEditing] = useState(false)
+  const [value,   setValue]   = useState(cat.markup_pct != null ? String(cat.markup_pct) : '')
+  const [saving,  setSaving]  = useState(false)
+  const [flash,   setFlash]   = useState(null) // 'ok' | 'err'
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    setValue(cat.markup_pct != null ? String(cat.markup_pct) : '')
+  }, [cat.markup_pct])
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select()
+  }, [editing])
+
+  const save = async () => {
+    const markup = value.trim() === '' ? null : parseFloat(value)
+    if (markup !== null && (!Number.isFinite(markup) || markup < 0 || markup > 500)) {
+      setFlash('err'); setTimeout(() => { setFlash(null); setEditing(false) }, 1500)
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'update', id: cat.id, markup_pct: markup }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error')
+      setEditing(false)
+      setFlash('ok')
+      setTimeout(() => setFlash(null), 1500)
+      onSaved()
+    } catch {
+      setFlash('err')
+      setTimeout(() => { setFlash(null); setEditing(false) }, 1500)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const cancel = () => {
+    setValue(cat.markup_pct != null ? String(cat.markup_pct) : '')
+    setEditing(false)
+  }
+
+  const hasCustom     = cat.markup_pct !== null
+  const displayMarkup = hasCustom ? cat.markup_pct : globalMarkup
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <input
+          ref={inputRef}
+          type="number" min="0" max="500" step="0.5"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter')  save()
+            if (e.key === 'Escape') cancel()
+          }}
+          onBlur={save}
+          disabled={saving}
+          placeholder={`${globalMarkup ?? 0}`}
+          className="w-20 px-2 py-1 border border-blue-400 rounded-lg text-sm text-center
+                     font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500
+                     disabled:opacity-50"
+        />
+        <span className="text-xs text-gray-400 shrink-0">%</span>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="text-xs bg-blue-600 text-white px-2 py-1 rounded-lg hover:bg-blue-700
+                     disabled:opacity-50 font-semibold shrink-0"
+        >
+          {saving ? '…' : '✓'}
+        </button>
+        <button
+          onMouseDown={e => { e.preventDefault(); cancel() }}
+          className="text-xs text-gray-400 hover:text-gray-600 px-1 py-1 shrink-0"
+        >
+          ✕
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      title="Click para editar el markup de esta categoría"
+      className={`group flex items-center gap-1.5 px-2.5 py-1.5 rounded-full transition-all
+        ${flash === 'ok'  ? 'bg-green-100 text-green-700 ring-2 ring-green-300' :
+          flash === 'err' ? 'bg-red-100 text-red-600 ring-2 ring-red-300' :
+          hasCustom
+            ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+    >
+      <span className="text-xs font-semibold">
+        {flash === 'ok'  ? '✅ Guardado' :
+         flash === 'err' ? '❌ Error' :
+         displayMarkup != null ? `${displayMarkup}%` : '—'}
+      </span>
+      {!flash && hasCustom && <span className="text-[9px] text-purple-500">★</span>}
+      {!flash && !hasCustom && <span className="text-[9px] text-gray-400">(global)</span>}
+      {!flash && <span className="text-[10px] text-gray-300 group-hover:text-gray-500 ml-0.5">✏️</span>}
+    </button>
+  )
+}
+
 // ── Modal: crear categoría ──────────────────────────────────────────────────
 function CreateModal({ onClose, onCreated }) {
-  const [name,      setName]      = useState('')
-  const [markup,    setMarkup]    = useState('')
-  const [saving,    setSaving]    = useState(false)
-  const [error,     setError]     = useState(null)
+  const [name,   setName]   = useState('')
+  const [markup, setMarkup] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error,  setError]  = useState(null)
   const inputRef = useRef(null)
 
   useEffect(() => { inputRef.current?.focus() }, [])
@@ -66,46 +176,33 @@ function CreateModal({ onClose, onCreated }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-         onClick={() => onClose()}>
+         onClick={onClose}>
       <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
            onClick={e => e.stopPropagation()}>
         <h3 className="font-bold text-gray-800 mb-4 text-base">➕ Nueva categoría</h3>
-
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">Nombre *</label>
-            <input
-              ref={inputRef}
-              value={name}
-              onChange={e => setName(e.target.value)}
+            <input ref={inputRef} value={name} onChange={e => setName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSubmit()}
               placeholder="Ej: Monitores"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
-                         focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+                         focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">
               Markup % <span className="text-gray-400 font-normal">(opcional — si no, usa el global)</span>
             </label>
             <div className="flex items-center gap-2">
-              <input
-                type="number" min="0" max="500" step="0.5"
-                value={markup}
-                onChange={e => setMarkup(e.target.value)}
-                placeholder="Ej: 25"
+              <input type="number" min="0" max="500" step="0.5" value={markup}
+                onChange={e => setMarkup(e.target.value)} placeholder="Ej: 25"
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
-                           focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+                           focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <span className="text-gray-500 font-medium">%</span>
             </div>
           </div>
         </div>
-
-        {error && (
-          <p className="text-xs text-red-500 mt-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
-        )}
-
+        {error && <p className="text-xs text-red-500 mt-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
         <div className="flex gap-3 mt-5">
           <button onClick={onClose}
             className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50">
@@ -122,17 +219,15 @@ function CreateModal({ onClose, onCreated }) {
   )
 }
 
-// ── Modal: editar categoría ─────────────────────────────────────────────────
+// ── Modal: renombrar categoría ──────────────────────────────────────────────
 function EditModal({ category, onClose, onSaved }) {
   const [name,   setName]   = useState(category.name)
-  const [markup, setMarkup] = useState(
-    category.markup_pct !== null ? String(category.markup_pct) : ''
-  )
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState(null)
 
   const handleSave = async () => {
     if (!name.trim()) { setError('El nombre es requerido.'); return }
+    if (name.trim() === category.name) { onClose(); return }
     setSaving(true); setError(null)
     try {
       const res = await fetch('/api/categories', {
@@ -142,7 +237,7 @@ function EditModal({ category, onClose, onSaved }) {
           action:     'update',
           id:         category.id,
           name:       name.trim(),
-          markup_pct: markup !== '' ? parseFloat(markup) : null,
+          markup_pct: category.markup_pct, // mantener markup existente
         }),
       })
       const data = await res.json()
@@ -159,49 +254,16 @@ function EditModal({ category, onClose, onSaved }) {
          onClick={onClose}>
       <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
            onClick={e => e.stopPropagation()}>
-        <h3 className="font-bold text-gray-800 mb-1 text-base">✏️ Editar categoría</h3>
+        <h3 className="font-bold text-gray-800 mb-1 text-base">✏️ Renombrar categoría</h3>
         <p className="text-xs text-gray-400 mb-4">
-          Cambiar el nombre actualiza automáticamente los productos asignados.
+          Actualiza automáticamente todos los productos asignados.
         </p>
-
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">Nombre *</label>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
-                         focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              Markup % <span className="text-gray-400 font-normal">(vacío = usar global)</span>
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number" min="0" max="500" step="0.5"
-                value={markup}
-                onChange={e => setMarkup(e.target.value)}
-                placeholder="Markup global"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
-                           focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <span className="text-gray-500 font-medium">%</span>
-            </div>
-            {markup !== '' && (
-              <button onClick={() => setMarkup('')}
-                className="text-xs text-gray-400 hover:text-red-500 mt-1">
-                × Quitar markup personalizado
-              </button>
-            )}
-          </div>
-        </div>
-
-        {error && (
-          <p className="text-xs text-red-500 mt-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
-        )}
-
+        <input value={name} onChange={e => setName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSave()}
+          autoFocus
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
+                     focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        {error && <p className="text-xs text-red-500 mt-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
         <div className="flex gap-3 mt-5">
           <button onClick={onClose}
             className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50">
@@ -210,7 +272,7 @@ function EditModal({ category, onClose, onSaved }) {
           <button onClick={handleSave} disabled={saving}
             className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-semibold
                        hover:bg-blue-700 disabled:opacity-50">
-            {saving ? 'Guardando...' : 'Guardar cambios'}
+            {saving ? 'Guardando...' : 'Guardar nombre'}
           </button>
         </div>
       </div>
@@ -259,7 +321,6 @@ function DeleteModal({ category, allCategories, onClose, onDeleted }) {
             <p className="text-sm text-gray-500">«{category.name}»</p>
           </div>
         </div>
-
         {category.product_count > 0 ? (
           <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 mb-4">
             <p className="text-sm text-orange-700 font-medium">
@@ -274,18 +335,12 @@ function DeleteModal({ category, allCategories, onClose, onDeleted }) {
             Esta categoría no tiene productos asignados. Se puede eliminar sin impacto.
           </p>
         )}
-
         {category.product_count > 0 && (
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-600 mb-1">
-              Reasignar productos a:
-            </label>
-            <select
-              value={reassignTo}
-              onChange={e => setReassignTo(e.target.value)}
+            <label className="block text-sm font-medium text-gray-600 mb-1">Reasignar productos a:</label>
+            <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
-                         focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
+                         focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">— Dejar sin reasignar —</option>
               {otherCats.map(c => (
                 <option key={c.id} value={c.name}>{c.name} ({c.product_count})</option>
@@ -293,11 +348,7 @@ function DeleteModal({ category, allCategories, onClose, onDeleted }) {
             </select>
           </div>
         )}
-
-        {error && (
-          <p className="text-xs text-red-500 mb-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>
-        )}
-
+        {error && <p className="text-xs text-red-500 mb-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
         <div className="flex gap-3">
           <button onClick={onClose}
             className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50">
@@ -326,13 +377,11 @@ function AssignModal({ category, allCategories, onClose }) {
   const [feedback,  setFeedback]  = useState(null)
   const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  // Debounce búsqueda
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 350)
     return () => clearTimeout(t)
   }, [search])
 
-  // Cargar productos cuando cambian filtros
   useEffect(() => {
     const load = async () => {
       setLoading(true)
@@ -356,13 +405,10 @@ function AssignModal({ category, allCategories, onClose }) {
     return n
   })
 
-  const selectAll = () => setSelected(new Set(products.map(p => p.id)))
-  const clearAll  = () => setSelected(new Set())
-
-  // Seleccionar los que ya están en esta categoría
-  const selectCurrentCategory = () => {
+  const selectAll             = () => setSelected(new Set(products.map(p => p.id)))
+  const clearAll              = () => setSelected(new Set())
+  const selectCurrentCategory = () =>
     setSelected(new Set(products.filter(p => p.category === category.name).map(p => p.id)))
-  }
 
   const handleAssign = async () => {
     if (!selected.size) return
@@ -381,7 +427,6 @@ function AssignModal({ category, allCategories, onClose }) {
       if (!res.ok) throw new Error(data.error || 'Error')
       setFeedback({ type: 'ok', msg: `✅ ${data.updated_count} productos asignados a "${category.name}"` })
       setSelected(new Set())
-      // Refrescar lista
       const params = new URLSearchParams({ mode: 'products', limit: '80' })
       if (debouncedSearch) params.set('search', debouncedSearch)
       if (filterCat)       params.set('category', filterCat)
@@ -400,35 +445,21 @@ function AssignModal({ category, allCategories, onClose }) {
          onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
            onClick={e => e.stopPropagation()}>
-
-        {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 flex items-start justify-between gap-4">
           <div>
-            <h3 className="font-bold text-gray-800 text-base">
-              📦 Asignar productos a «{category.name}»
-            </h3>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Seleccioná los productos y hacé clic en "Asignar".
-            </p>
+            <h3 className="font-bold text-gray-800 text-base">📦 Asignar productos a «{category.name}»</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Seleccioná los productos y hacé clic en "Asignar".</p>
           </div>
           <button onClick={onClose} className="text-gray-300 hover:text-gray-600 text-xl leading-none mt-0.5">✕</button>
         </div>
-
-        {/* Filtros */}
         <div className="px-6 py-3 border-b border-gray-100 flex flex-wrap gap-3">
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
+          <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="🔍 Buscar por nombre, marca, SKU..."
             className="flex-1 min-w-[200px] px-3 py-1.5 border border-gray-200 rounded-lg text-sm
-                       focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <select
-            value={filterCat}
-            onChange={e => setFilterCat(e.target.value)}
+                       focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
             className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm
-                       focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[160px]"
-          >
+                       focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[160px]">
             <option value="">Todas las categorías</option>
             <option value="__none__">Sin categoría</option>
             {allCategories.map(c => (
@@ -436,46 +467,32 @@ function AssignModal({ category, allCategories, onClose }) {
             ))}
           </select>
         </div>
-
-        {/* Acciones masivas */}
         <div className="px-6 py-2 flex items-center gap-3 text-xs border-b border-gray-100 bg-gray-50">
           <span className="text-gray-500">
             {loading ? 'Cargando...' : `${total} productos · ${selected.size} seleccionados`}
           </span>
-          <button onClick={selectAll}              className="text-blue-600 hover:underline">Seleccionar todo</button>
-          <button onClick={clearAll}               className="text-gray-400 hover:underline">Limpiar</button>
-          <button onClick={selectCurrentCategory}  className="text-green-600 hover:underline">
-            Seleccionar los de esta categoría
+          <button onClick={selectAll}             className="text-blue-600 hover:underline">Seleccionar todo</button>
+          <button onClick={clearAll}              className="text-gray-400 hover:underline">Limpiar</button>
+          <button onClick={selectCurrentCategory} className="text-green-600 hover:underline">
+            Los de esta categoría
           </button>
         </div>
-
-        {/* Lista de productos */}
         <div className="flex-1 overflow-y-auto px-4 py-2">
           {loading ? (
-            <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
-              Cargando productos...
-            </div>
+            <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Cargando productos...</div>
           ) : products.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
-              No se encontraron productos
-            </div>
+            <div className="flex items-center justify-center h-32 text-gray-400 text-sm">No se encontraron productos</div>
           ) : (
             <div className="space-y-1">
               {products.map(p => {
                 const isSelected = selected.has(p.id)
                 const isCurrent  = p.category === category.name
                 return (
-                  <label
-                    key={p.id}
+                  <label key={p.id}
                     className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors
-                      ${isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent'}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggle(p.id)}
-                      className="accent-blue-600 w-4 h-4 shrink-0"
-                    />
+                      ${isSelected ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent'}`}>
+                    <input type="checkbox" checked={isSelected} onChange={() => toggle(p.id)}
+                      className="accent-blue-600 w-4 h-4 shrink-0" />
                     {p.image_url
                       ? <img src={p.image_url} alt="" className="w-9 h-9 object-contain rounded bg-gray-50 shrink-0"
                              onError={e => e.target.style.display='none'} />
@@ -483,15 +500,11 @@ function AssignModal({ category, allCategories, onClose }) {
                     }
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{p.name}</p>
-                      <p className="text-[11px] text-gray-400 truncate">
-                        {p.brand && `${p.brand} · `}{p.sku}
-                      </p>
+                      <p className="text-[11px] text-gray-400 truncate">{p.brand && `${p.brand} · `}{p.sku}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {isCurrent && (
-                        <span className="text-[10px] bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">
-                          Actual
-                        </span>
+                        <span className="text-[10px] bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">Actual</span>
                       )}
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium
                         ${p.stock > 10 ? 'bg-green-100 text-green-700'
@@ -509,8 +522,6 @@ function AssignModal({ category, allCategories, onClose }) {
             </div>
           )}
         </div>
-
-        {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between gap-4">
           {feedback ? (
             <p className={`text-sm font-medium ${feedback.type === 'ok' ? 'text-green-600' : 'text-red-500'}`}>
@@ -518,9 +529,7 @@ function AssignModal({ category, allCategories, onClose }) {
             </p>
           ) : (
             <p className="text-xs text-gray-400">
-              {selected.size > 0
-                ? `${selected.size} productos se moverán a "${category.name}"`
-                : 'Seleccioná productos para asignar'}
+              {selected.size > 0 ? `${selected.size} productos se moverán a "${category.name}"` : 'Seleccioná productos para asignar'}
             </p>
           )}
           <div className="flex gap-3">
@@ -528,12 +537,9 @@ function AssignModal({ category, allCategories, onClose }) {
               className="px-5 py-2 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50">
               Cerrar
             </button>
-            <button
-              onClick={handleAssign}
-              disabled={saving || selected.size === 0}
+            <button onClick={handleAssign} disabled={saving || selected.size === 0}
               className="px-5 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold
-                         hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
+                         hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">
               {saving ? 'Asignando...' : `Asignar ${selected.size > 0 ? `(${selected.size})` : ''}`}
             </button>
           </div>
@@ -544,27 +550,25 @@ function AssignModal({ category, allCategories, onClose }) {
 }
 
 // ── Fila de categoría ────────────────────────────────────────────────────────
-function CategoryRow({ cat, allCategories, globalMarkup, onReload }) {
+function CategoryRow({ cat, allCategories, globalMarkup, onReload, onViewProducts }) {
   const [showEdit,   setShowEdit]   = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
 
-  const hasCustomMarkup = cat.markup_pct !== null
-  const effectiveMarkup = hasCustomMarkup ? cat.markup_pct : globalMarkup
-
   return (
     <>
-      <div className="grid grid-cols-[1fr_80px_140px_80px_auto] items-center
-                      px-5 py-3.5 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 gap-3">
+      <div className="grid grid-cols-[1fr_60px_210px_auto] items-center
+                      px-5 py-3.5 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 gap-4">
+
         {/* Nombre */}
-        <div>
-          <p className="font-semibold text-gray-800 text-sm">{cat.name}</p>
+        <div className="min-w-0">
+          <p className="font-semibold text-gray-800 text-sm truncate">{cat.name}</p>
           <p className="text-[11px] text-gray-400 mt-0.5">
             {cat.product_count} {cat.product_count === 1 ? 'producto' : 'productos'}
           </p>
         </div>
 
-        {/* Productos (badge) */}
+        {/* Badge cantidad */}
         <div>
           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full
             ${cat.product_count > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>
@@ -572,29 +576,20 @@ function CategoryRow({ cat, allCategories, globalMarkup, onReload }) {
           </span>
         </div>
 
-        {/* Markup */}
-        <div className="flex items-center gap-2">
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full
-            ${hasCustomMarkup
-              ? 'bg-purple-100 text-purple-700'
-              : 'bg-gray-100 text-gray-500'}`}>
-            {effectiveMarkup != null ? `${effectiveMarkup}%` : '—'}
-            {hasCustomMarkup && <span className="ml-1 text-[9px]">★</span>}
-          </span>
-          {!hasCustomMarkup && (
-            <span className="text-[10px] text-gray-400">(global)</span>
-          )}
-        </div>
-
-        {/* Última actualización */}
-        <div className="text-[11px] text-gray-400">
-          {cat.updated_at
-            ? new Date(cat.updated_at).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
-            : '—'}
-        </div>
+        {/* Markup inline editable */}
+        <InlineMarkupEditor cat={cat} globalMarkup={globalMarkup} onSaved={onReload} />
 
         {/* Acciones */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
+          {cat.product_count > 0 && (
+            <button
+              onClick={() => onViewProducts(cat.name)}
+              title={`Ver los ${cat.product_count} productos de esta categoría en el catálogo`}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700
+                         hover:bg-indigo-100 border border-indigo-200 whitespace-nowrap">
+              🔍 Ver productos
+            </button>
+          )}
           <button
             onClick={() => setShowAssign(true)}
             title="Asignar productos"
@@ -604,7 +599,7 @@ function CategoryRow({ cat, allCategories, globalMarkup, onReload }) {
           </button>
           <button
             onClick={() => setShowEdit(true)}
-            title="Editar"
+            title="Renombrar"
             className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50
                        border border-transparent hover:border-blue-200 text-sm">
             ✏️
@@ -619,30 +614,13 @@ function CategoryRow({ cat, allCategories, globalMarkup, onReload }) {
         </div>
       </div>
 
-      {showEdit && (
-        <EditModal
-          category={cat}
-          onClose={() => setShowEdit(false)}
-          onSaved={() => { setShowEdit(false); onReload() }}
-        />
-      )}
-
-      {showDelete && (
-        <DeleteModal
-          category={cat}
-          allCategories={allCategories}
-          onClose={() => setShowDelete(false)}
-          onDeleted={() => { setShowDelete(false); onReload() }}
-        />
-      )}
-
-      {showAssign && (
-        <AssignModal
-          category={cat}
-          allCategories={allCategories}
-          onClose={() => { setShowAssign(false); onReload() }}
-        />
-      )}
+      {showEdit   && <EditModal   category={cat} onClose={() => setShowEdit(false)}
+                                  onSaved={() => { setShowEdit(false); onReload() }} />}
+      {showDelete && <DeleteModal category={cat} allCategories={allCategories}
+                                  onClose={() => setShowDelete(false)}
+                                  onDeleted={() => { setShowDelete(false); onReload() }} />}
+      {showAssign && <AssignModal category={cat} allCategories={allCategories}
+                                  onClose={() => { setShowAssign(false); onReload() }} />}
     </>
   )
 }
@@ -650,11 +628,11 @@ function CategoryRow({ cat, allCategories, globalMarkup, onReload }) {
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function Categories() {
   const { categories, loading, error, reload } = useCategories()
-  const [showCreate,  setShowCreate]  = useState(false)
-  const [search,      setSearch]      = useState('')
+  const { setCurrentPage, setAdminCategoryFilter } = useApp()
+  const [showCreate,   setShowCreate]   = useState(false)
+  const [search,       setSearch]       = useState('')
   const [globalMarkup, setGlobalMarkup] = useState(null)
 
-  // Cargar markup global para mostrarlo como referencia
   useEffect(() => {
     fetch('/api/settings')
       .then(r => r.json())
@@ -668,6 +646,12 @@ export default function Categories() {
 
   const totalProducts = categories.reduce((s, c) => s + (c.product_count || 0), 0)
   const withMarkup    = categories.filter(c => c.markup_pct !== null).length
+
+  // Navegar a la página de Productos pre-filtrada por categoría
+  const handleViewProducts = (categoryName) => {
+    setAdminCategoryFilter(categoryName)
+    setCurrentPage('products')
+  }
 
   return (
     <>
@@ -683,7 +667,7 @@ export default function Categories() {
           {!loading && (
             <p className="text-xs text-gray-400 mt-0.5">
               {totalProducts} productos asignados ·{' '}
-              {withMarkup} categorías con markup personalizado ·{' '}
+              {withMarkup} con markup personalizado ·{' '}
               Markup global: <strong>{globalMarkup ?? '—'}%</strong>
             </p>
           )}
@@ -696,16 +680,19 @@ export default function Categories() {
         </button>
       </div>
 
-      {/* ── Info markup jerarquía ──────────────────────────────────────── */}
+      {/* ── Info jerarquía ──────────────────────────────────────────────── */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-5
                       flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-blue-700">
         <span className="font-semibold">💹 Jerarquía de markup:</span>
-        <span>1. Markup del producto (★) — máxima prioridad</span>
-        <span>2. Markup de categoría (★) — si no tiene el producto</span>
-        <span>3. Markup global — fallback final</span>
+        <span>1. Producto individual (★)</span>
+        <span>2. Categoría (★)</span>
+        <span>3. Global — fallback final</span>
+        <span className="text-blue-500 italic">
+          Hacé click directo en el markup de una fila para editarlo sin abrir ningún modal.
+        </span>
       </div>
 
-      {/* ── Búsqueda ──────────────────────────────────────────────────── */}
+      {/* ── Búsqueda ────────────────────────────────────────────────────── */}
       <div className="mb-4">
         <input
           value={search}
@@ -716,7 +703,6 @@ export default function Categories() {
         />
       </div>
 
-      {/* ── Loading / Error ────────────────────────────────────────────── */}
       {loading && (
         <div className="flex items-center justify-center h-40 text-gray-400">
           <div className="animate-spin text-3xl mr-3">⚙️</div> Cargando...
@@ -738,23 +724,20 @@ export default function Categories() {
         </div>
       )}
 
-      {/* ── Tabla ─────────────────────────────────────────────────────── */}
       {!loading && !error && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          {/* Encabezado */}
-          <div className="grid grid-cols-[1fr_80px_140px_80px_auto] px-5 py-2.5
+          <div className="grid grid-cols-[1fr_60px_210px_auto] px-5 py-2.5
                           bg-gray-50 border-b border-gray-200
-                          text-[11px] font-semibold text-gray-400 uppercase tracking-wider gap-3">
+                          text-[11px] font-semibold text-gray-400 uppercase tracking-wider gap-4">
             <span>Categoría</span>
             <span>Prods.</span>
-            <span>Markup</span>
-            <span>Actualizado</span>
+            <span>Markup (click = editar)</span>
             <span>Acciones</span>
           </div>
 
           {filtered.length === 0 ? (
             <div className="py-16 text-center text-gray-400 text-sm">
-              {search ? 'No hay categorías que coincidan con la búsqueda' : 'No hay categorías creadas'}
+              {search ? 'No hay categorías que coincidan' : 'No hay categorías creadas'}
               {!search && (
                 <button onClick={() => setShowCreate(true)}
                   className="block mx-auto mt-3 text-blue-600 text-sm hover:underline">
@@ -770,13 +753,13 @@ export default function Categories() {
                 allCategories={categories}
                 globalMarkup={globalMarkup}
                 onReload={reload}
+                onViewProducts={handleViewProducts}
               />
             ))
           )}
         </div>
       )}
 
-      {/* ── Modal crear ────────────────────────────────────────────────── */}
       {showCreate && (
         <CreateModal
           onClose={() => setShowCreate(false)}
