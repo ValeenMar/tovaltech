@@ -96,7 +96,7 @@ function ProductCard({ product, priority = false }) {
           <div>
             <p className="text-lg font-bold text-gray-900 leading-tight">{fmtARS(product.price_ars)}</p>
             <p className="text-[11px] text-gray-400 mt-0.5">
-              Neto: {fmtARS(Math.round(product.price_ars / 1.21))}
+              Neto: {fmtARS(product.price_ars)}
             </p>
           </div>
 
