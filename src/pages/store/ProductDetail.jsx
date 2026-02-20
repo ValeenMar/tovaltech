@@ -1,13 +1,131 @@
 // src/pages/store/ProductDetail.jsx
 // Página de detalle de producto — /productos/:id
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import ProductCard from '../../components/store/ProductCard';
 
 const fmtARS = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
+
+// ── Carrusel de productos similares ──────────────────────────────────────────
+// Muestra 4 cards por vez en desktop, 2 en mobile.
+// Flechas ‹ › para navegar, drag/swipe con el mouse o touch.
+function SimilarCarousel({ products, category }) {
+  const VISIBLE_LG = 4
+  const VISIBLE_SM = 2
+  const [startIndex, setStartIndex] = useState(0)
+  const trackRef   = useRef(null)
+  const dragStart  = useRef(null)
+
+  // Cuántos items mostrar según el ancho de pantalla
+  const visible = () => (window.innerWidth >= 640 ? VISIBLE_LG : VISIBLE_SM)
+
+  const maxIndex = Math.max(0, products.length - visible())
+
+  const prev = () => setStartIndex(i => Math.max(0, i - 1))
+  const next = () => setStartIndex(i => Math.min(maxIndex, i + 1))
+
+  // Drag / swipe
+  const onPointerDown = (e) => {
+    dragStart.current = e.clientX ?? e.touches?.[0]?.clientX
+  }
+  const onPointerUp = (e) => {
+    if (dragStart.current == null) return
+    const end  = e.clientX ?? e.changedTouches?.[0]?.clientX ?? dragStart.current
+    const diff = dragStart.current - end
+    if (Math.abs(diff) > 40) diff > 0 ? next() : prev()
+    dragStart.current = null
+  }
+
+  const canPrev = startIndex > 0
+  const canNext = startIndex < maxIndex
+
+  // Cuántas páginas hay (para los dots)
+  const vis      = typeof window !== 'undefined' ? (window.innerWidth >= 640 ? VISIBLE_LG : VISIBLE_SM) : VISIBLE_LG
+  const pageCount = Math.ceil(products.length / vis)
+  const currentPage = Math.floor(startIndex / vis)
+
+  return (
+    <div className="mt-14">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-lg font-bold text-gray-800">Productos similares</h2>
+          <p className="text-sm text-gray-400 capitalize">{category?.toLowerCase()}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link
+            to={`/productos?categoria=${encodeURIComponent(category)}`}
+            className="text-sm text-blue-600 hover:text-blue-700 font-medium mr-2"
+          >
+            Ver todos →
+          </Link>
+          {/* Flechas desktop */}
+          <button
+            onClick={prev} disabled={!canPrev}
+            className={`w-9 h-9 rounded-full border flex items-center justify-center text-lg transition-all
+              ${canPrev
+                ? 'border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50'
+                : 'border-gray-100 text-gray-300 cursor-default'}`}
+            aria-label="Anterior"
+          >‹</button>
+          <button
+            onClick={next} disabled={!canNext}
+            className={`w-9 h-9 rounded-full border flex items-center justify-center text-lg transition-all
+              ${canNext
+                ? 'border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50'
+                : 'border-gray-100 text-gray-300 cursor-default'}`}
+            aria-label="Siguiente"
+          >›</button>
+        </div>
+      </div>
+
+      {/* Track */}
+      <div
+        ref={trackRef}
+        className="overflow-hidden cursor-grab active:cursor-grabbing select-none"
+        onMouseDown={onPointerDown}
+        onMouseUp={onPointerUp}
+        onTouchStart={onPointerDown}
+        onTouchEnd={onPointerUp}
+      >
+        <div
+          className="flex gap-4 transition-transform duration-300 ease-out"
+          style={{ transform: `translateX(calc(-${startIndex} * (100% / ${VISIBLE_LG} + 1px)))` }}
+        >
+          {products.map(p => (
+            <div
+              key={p.id}
+              className="flex-none w-[calc(25%-12px)] sm:w-[calc(25%-12px)] max-sm:w-[calc(50%-8px)]"
+              style={{ pointerEvents: 'auto' }}
+            >
+              <ProductCard product={p} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Dots */}
+      {pageCount > 1 && (
+        <div className="flex justify-center gap-1.5 mt-5">
+          {Array.from({ length: pageCount }).map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setStartIndex(i * vis)}
+              className={`rounded-full transition-all
+                ${i === currentPage
+                  ? 'w-5 h-2 bg-blue-600'
+                  : 'w-2 h-2 bg-gray-300 hover:bg-gray-400'}`}
+              aria-label={`Página ${i + 1}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function ProductDetail() {
   const { id }        = useParams();
@@ -37,11 +155,10 @@ export default function ProductDetail() {
         setLoading(false);
         // Cargar similares de la misma categoría
         if (p.category) {
-          fetch(`/api/products?categoria=${encodeURIComponent(p.category)}&limit=5`)
+          fetch(`/api/products?categoria=${encodeURIComponent(p.category)}&limit=13`)
             .then(r => r.ok ? r.json() : { items: [] })
             .then(d => {
-              // Excluir el producto actual
-              setSimilar((d.items || []).filter(x => String(x.id) !== String(p.id)).slice(0, 4));
+              setSimilar((d.items || []).filter(x => String(x.id) !== String(p.id)).slice(0, 12));
             })
             .catch(() => {});
         }
@@ -230,23 +347,10 @@ export default function ProductDetail() {
 
       {/* ── Productos similares ────────────────────────────────────────────── */}
       {similar.length > 0 && (
-        <div className="mt-14">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 className="text-lg font-bold text-gray-800">Productos similares</h2>
-              <p className="text-sm text-gray-400 capitalize">{product.category?.toLowerCase()}</p>
-            </div>
-            <Link
-              to={`/productos?categoria=${encodeURIComponent(product.category)}`}
-              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Ver todos →
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {similar.map(p => <ProductCard key={p.id} product={p} />)}
-          </div>
-        </div>
+        <SimilarCarousel
+          products={similar}
+          category={product.category}
+        />
       )}
 
       {/* Volver al catálogo */}
