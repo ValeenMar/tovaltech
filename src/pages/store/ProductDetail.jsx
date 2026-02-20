@@ -4,34 +4,48 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
+import ProductCard from '../../components/store/ProductCard';
 
 const fmtARS = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
 
-const fmtUSD = (n) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n ?? 0);
-
 export default function ProductDetail() {
-  const { id }          = useParams();
-  const navigate        = useNavigate();
-  const { addToCart }   = useCart();
+  const { id }        = useParams();
+  const navigate      = useNavigate();
+  const { addToCart } = useCart();
 
   const [product,  setProduct]  = useState(null);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
   const [imgError, setImgError] = useState(false);
   const [added,    setAdded]    = useState(false);
+  const [similar,  setSimilar]  = useState([]);
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
+    setImgError(false);
+    setSimilar([]);
     fetch(`/api/product?id=${id}`)
       .then(r => {
         if (r.status === 404) throw new Error('not_found');
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then(p => { setProduct(p); setLoading(false); })
+      .then(p => {
+        setProduct(p);
+        setLoading(false);
+        // Cargar similares de la misma categoría
+        if (p.category) {
+          fetch(`/api/products?categoria=${encodeURIComponent(p.category)}&limit=5`)
+            .then(r => r.ok ? r.json() : { items: [] })
+            .then(d => {
+              // Excluir el producto actual
+              setSimilar((d.items || []).filter(x => String(x.id) !== String(p.id)).slice(0, 4));
+            })
+            .catch(() => {});
+        }
+      })
       .catch(err => {
         if (err.message === 'not_found') navigate('/productos', { replace: true });
         else { setError(err.message); setLoading(false); }
@@ -120,7 +134,7 @@ export default function ProductDetail() {
         {/* Info */}
         <div className="flex flex-col">
 
-          {/* Categoría + Marca */}
+          {/* Categoría + Marca — SIN proveedor (solo visible en admin) */}
           <div className="flex items-center gap-2 mb-3">
             {product.category && (
               <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full capitalize">
@@ -129,9 +143,6 @@ export default function ProductDetail() {
             )}
             {product.brand && (
               <span className="text-xs text-gray-400 font-medium">{product.brand}</span>
-            )}
-            {product.provider && (
-              <span className="text-xs text-gray-300 ml-auto capitalize">{product.provider}</span>
             )}
           </div>
 
@@ -156,7 +167,7 @@ export default function ProductDetail() {
           <div className="bg-gray-50 rounded-2xl px-5 py-4 mb-5">
             <p className="text-3xl font-bold text-gray-900 mb-1">{fmtARS(product.price_ars)}</p>
             <p className="text-xs text-gray-400">
-              Neto: {fmtARS(Math.round(product.price_ars / 1.21))}
+              Precio sin impuestos nacionales: {fmtARS(Math.round(product.price_ars / 1.21))}
             </p>
             {product.dolar_rate && (
               <p className="text-xs text-gray-400 mt-1">
@@ -195,22 +206,50 @@ export default function ProductDetail() {
 
             <Link
               to="/carrito"
-              className="w-full py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium
-                         hover:bg-gray-50 transition-colors text-center"
+              className="w-full py-3 rounded-xl bg-gray-800 text-white text-sm font-semibold
+                         hover:bg-gray-700 active:scale-[0.98] transition-all text-center"
             >
-              Ver carrito
+              🛒 Ver carrito
             </Link>
           </div>
 
           {/* Info adicional */}
           <div className="mt-5 pt-5 border-t border-gray-100 space-y-2 text-xs text-gray-400">
             <p>📦 Retiro en tienda o envío a todo el país</p>
-            <p>💳 Pagá con MercadoPago o consultá por WhatsApp</p>
+            <p>
+              💳 Pagá con MercadoPago o consultá por{' '}
+              <a href="https://wa.me/5491123413674" target="_blank" rel="noopener noreferrer"
+                 className="text-green-600 hover:underline font-medium">WhatsApp</a>
+              {' '}o{' '}
+              <a href="mailto:valentin@toval-tech.com"
+                 className="text-blue-500 hover:underline font-medium">mail</a>
+            </p>
           </div>
         </div>
       </div>
 
-      {/* Botón volver */}
+      {/* ── Productos similares ────────────────────────────────────────────── */}
+      {similar.length > 0 && (
+        <div className="mt-14">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-lg font-bold text-gray-800">Productos similares</h2>
+              <p className="text-sm text-gray-400 capitalize">{product.category?.toLowerCase()}</p>
+            </div>
+            <Link
+              to={`/productos?categoria=${encodeURIComponent(product.category)}`}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Ver todos →
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {similar.map(p => <ProductCard key={p.id} product={p} />)}
+          </div>
+        </div>
+      )}
+
+      {/* Volver al catálogo */}
       <div className="mt-10">
         <Link
           to="/productos"
