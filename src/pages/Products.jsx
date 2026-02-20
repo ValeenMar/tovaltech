@@ -1,21 +1,27 @@
 // src/pages/Products.jsx
-// Panel admin — Catálogo de productos conectado a Azure SQL.
-// Lee precios reales del mayorista (neto con IVA incluido) y permite
-// ajustar markup global e individual por producto.
+// Panel admin — Catálogo con filtro por categoría, markup masivo y toggle visibilidad.
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useAdminProducts } from '../hooks/useAdminProducts'
 
-// ── Formatters ────────────────────────────────────────────────────────────────
 const fmtUSD = (n) => n != null
-  ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-  : '—'
-
+  ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n) : '—'
 const fmtARS = (n) => n != null
-  ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
-  : '—'
+  ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n) : '—'
 
-// ── Modal markup por producto ─────────────────────────────────────────────────
+// ── Hook: carga categorías ────────────────────────────────────────────────────
+function useCategories() {
+  const [categories, setCategories] = useState([])
+  useEffect(() => {
+    fetch('/api/categories')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setCategories(d.categories || []))
+      .catch(() => {})
+  }, [])
+  return categories
+}
+
+// ── Modal: markup por producto individual ─────────────────────────────────────
 function MarkupModal({ product, globalMarkup, onClose }) {
   const [value,  setValue]  = useState(product.markup_pct != null ? String(product.markup_pct) : '')
   const [saving, setSaving] = useState(false)
@@ -52,10 +58,9 @@ function MarkupModal({ product, globalMarkup, onClose }) {
            onClick={e => e.stopPropagation()}>
         <h3 className="font-bold text-gray-800 mb-1 text-sm">💹 Markup: {product.name}</h3>
         <p className="text-xs text-gray-500 mb-4">
-          Dejá vacío para usar el markup global ({globalMarkup ?? '—'}%).
-          El precio de costo (neto + IVA) es <strong>{fmtARS(costArs)}</strong>.
+          Vacío = usa el markup global ({globalMarkup ?? '—'}%).
+          Costo: <strong>{fmtARS(costArs)}</strong>
         </p>
-
         <div className="flex items-center gap-2 mb-4">
           <input
             type="number" min="0" max="500" step="0.5"
@@ -67,12 +72,9 @@ function MarkupModal({ product, globalMarkup, onClose }) {
           />
           <span className="text-lg font-bold text-gray-500">%</span>
         </div>
-
-        {/* Preview precio */}
         <div className="bg-gray-50 rounded-xl px-4 py-3 text-sm mb-4 space-y-1.5">
           <div className="flex justify-between text-gray-500">
-            <span>Neto + IVA (costo)</span>
-            <span>{fmtARS(costArs)}</span>
+            <span>Neto + IVA (costo)</span><span>{fmtARS(costArs)}</span>
           </div>
           <div className="flex justify-between text-gray-500">
             <span>Markup {effectiveMarkup}%{value === '' ? ' (global)' : ''}</span>
@@ -83,9 +85,7 @@ function MarkupModal({ product, globalMarkup, onClose }) {
             <span className="text-blue-600">{fmtARS(saleArs)}</span>
           </div>
         </div>
-
         {error && <p className="text-xs text-red-500 mb-3">{error}</p>}
-
         <div className="flex gap-2">
           <button onClick={() => onClose(false)}
             className="flex-1 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50">
@@ -102,12 +102,137 @@ function MarkupModal({ product, globalMarkup, onClose }) {
   )
 }
 
-// ── Vista LISTA — tabla con precios neto + IVA ────────────────────────────────
-function ListView({ products, globalMarkup, onMarkup }) {
+// ── Modal: markup masivo por categoría ────────────────────────────────────────
+function BulkMarkupModal({ category, globalMarkup, onClose }) {
+  const [value,  setValue]  = useState(category.markup_pct != null ? String(category.markup_pct) : '')
+  const [saving, setSaving] = useState(false)
+  const [saved,  setSaved]  = useState(false)
+  const [error,  setError]  = useState(null)
+
+  const handleSave = async () => {
+    const markup = value === '' ? null : parseFloat(value)
+    if (markup !== null && (!Number.isFinite(markup) || markup < 0 || markup > 500)) {
+      setError('Ingresá un número entre 0 y 500'); return
+    }
+    setSaving(true); setError(null)
+    try {
+      const res = await fetch('/api/categories', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'update', id: category.id, markup_pct: markup }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error')
+      setSaved(true)
+      setTimeout(() => onClose(true), 1200)
+    } catch (e) {
+      setError(e.message)
+      setSaving(false)
+    }
+  }
+
+  const effectivePct = value === '' ? (globalMarkup ?? 0) : (parseFloat(value) || 0)
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+         onClick={() => onClose(false)}>
+      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+           onClick={e => e.stopPropagation()}>
+        <h3 className="font-bold text-gray-800 mb-1">
+          💹 Markup de categoría: <span className="text-blue-600">{category.name}</span>
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Aplica a <strong>todos los productos</strong> de esta categoría que no tengan markup propio (★).
+          Dejá vacío para usar el markup global ({globalMarkup ?? '—'}%).
+        </p>
+
+        <div className="flex items-center gap-2 mb-2">
+          <input
+            type="number" min="0" max="500" step="0.5"
+            placeholder={`Global (${globalMarkup ?? 0}%)`}
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center
+                       font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <span className="text-lg font-bold text-gray-500">%</span>
+        </div>
+
+        {value !== '' && (
+          <button onClick={() => setValue('')}
+            className="text-xs text-gray-400 hover:text-red-500 mb-4 block">
+            × Quitar markup personalizado (vuelve al global)
+          </button>
+        )}
+
+        <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 text-xs text-blue-700 mb-4">
+          Los <strong>{category.product_count}</strong> productos de «{category.name}» se venderán
+          con <strong>{effectivePct}%</strong> de markup{value === '' ? ' (global)' : ''}.
+        </div>
+
+        {error && <p className="text-xs text-red-500 mb-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+        {saved  && <p className="text-xs text-green-600 mb-3 bg-green-50 px-3 py-2 rounded-lg">✅ Guardado</p>}
+
+        <div className="flex gap-2">
+          <button onClick={() => onClose(false)}
+            className="flex-1 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button onClick={handleSave} disabled={saving || saved}
+            className="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold
+                       hover:bg-blue-700 disabled:opacity-50">
+            {saving ? 'Guardando...' : 'Aplicar a categoría'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Toggle visibilidad ────────────────────────────────────────────────────────
+function VisibilityToggle({ product, onToggled }) {
+  const [loading, setLoading] = useState(false)
+  const isActive = product.active !== false && product.active !== 0
+
+  const toggle = async (e) => {
+    e.stopPropagation()
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/products/${product.id}/markup`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ active: !isActive }),
+      })
+      if (!res.ok) throw new Error()
+      onToggled()
+    } catch {
+      // silencio — el estado no cambia
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={loading}
+      title={isActive ? 'Ocultar de la tienda' : 'Mostrar en la tienda'}
+      className={`w-8 h-8 rounded-lg border text-sm transition-all flex items-center justify-center
+        ${loading ? 'opacity-40 cursor-wait' :
+          isActive
+            ? 'border-green-200 bg-green-50 text-green-600 hover:bg-red-50 hover:border-red-200 hover:text-red-500'
+            : 'border-red-200 bg-red-50 text-red-400 hover:bg-green-50 hover:border-green-200 hover:text-green-600'}`}
+    >
+      {loading ? '…' : isActive ? '👁' : '🚫'}
+    </button>
+  )
+}
+
+// ── Vista LISTA ───────────────────────────────────────────────────────────────
+function ListView({ products, globalMarkup, onMarkup, onReload }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      {/* Encabezado */}
-      <div className="grid grid-cols-[1fr_120px_80px_110px_110px_110px_90px_44px] px-4 py-2.5
+      <div className="grid grid-cols-[1fr_110px_70px_105px_105px_100px_80px_72px] px-4 py-2.5
                       bg-gray-50 border-b border-gray-200
                       text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
         <span>Producto</span>
@@ -117,32 +242,31 @@ function ListView({ products, globalMarkup, onMarkup }) {
         <span className="text-right text-blue-600">Neto + IVA</span>
         <span className="text-right">Markup</span>
         <span className="text-right text-green-600">Venta ARS</span>
-        <span></span>
+        <span className="text-center">Tienda</span>
       </div>
 
       {products.map((p, i) => {
-        const costArs   = p.price_ars_cost ?? p.price_ars ?? 0
+        const costArs   = p.price_ars_cost ?? 0
         const saleArs   = p.price_ars ?? 0
         const markupPct = p.markup_pct != null ? p.markup_pct : globalMarkup ?? 0
         const isCustom  = p.markup_pct != null
+        const isActive  = p.active !== false && p.active !== 0
 
         return (
           <div key={p.id}
-            className={`grid grid-cols-[1fr_120px_80px_110px_110px_110px_90px_44px]
-                        px-4 py-3 text-sm border-b border-gray-100 last:border-0 items-center
-                        ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'}`}>
+            className={`grid grid-cols-[1fr_110px_70px_105px_105px_100px_80px_72px]
+                        px-4 py-3 text-sm border-b border-gray-100 last:border-0 items-center gap-1
+                        ${!isActive ? 'opacity-50 bg-gray-50/80' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
 
             {/* Nombre */}
             <div className="min-w-0">
               <p className="font-medium text-gray-800 truncate text-xs leading-tight">{p.name}</p>
-              {p.brand && (
-                <p className="text-[10px] text-gray-400 truncate">{p.brand} · {p.sku}</p>
-              )}
+              {p.brand && <p className="text-[10px] text-gray-400 truncate">{p.brand} · {p.sku}</p>}
             </div>
 
-            {/* Proveedor / Categoría */}
+            {/* Proveedor / Cat */}
             <div className="text-[10px] text-gray-500">
-              <p className="capitalize font-medium">{p.provider ?? '—'}</p>
+              <p className="capitalize font-medium truncate">{p.provider ?? '—'}</p>
               <p className="text-gray-400 truncate">{p.category ?? '—'}</p>
             </div>
 
@@ -161,90 +285,79 @@ function ListView({ products, globalMarkup, onMarkup }) {
               {fmtUSD(p.price_usd_cost ?? p.price_usd)}
             </div>
 
-            {/* Neto + IVA (ARS costo) — columna principal de esta vista */}
+            {/* Neto + IVA */}
             <div className="text-right">
-              <span className="text-xs font-bold text-blue-700 font-mono">
-                {fmtARS(costArs)}
-              </span>
+              <span className="text-xs font-bold text-blue-700 font-mono">{fmtARS(costArs)}</span>
             </div>
 
             {/* Markup */}
             <div className="text-right">
-              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded
-                ${isCustom ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-                {markupPct}%
-                {isCustom && <span className="text-[9px] ml-0.5">★</span>}
-              </span>
+              <button onClick={() => onMarkup(p)}
+                className={`text-xs font-semibold px-1.5 py-0.5 rounded cursor-pointer
+                  hover:ring-2 hover:ring-blue-400 transition-all
+                  ${isCustom ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}
+                title="Cambiar markup de este producto">
+                {markupPct}%{isCustom && <span className="text-[9px] ml-0.5">★</span>}
+              </button>
             </div>
 
             {/* Venta ARS */}
             <div className="text-right">
-              <span className="text-xs font-bold text-green-700 font-mono">
-                {fmtARS(saleArs)}
-              </span>
+              <span className="text-xs font-bold text-green-700 font-mono">{fmtARS(saleArs)}</span>
             </div>
 
-            {/* Acción markup */}
+            {/* Toggle visibilidad */}
             <div className="flex justify-center">
-              <button
-                onClick={() => onMarkup(p)}
-                title="Ajustar markup"
-                className="w-7 h-7 rounded-lg border border-gray-200 text-gray-400
-                           hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50
-                           text-[11px] font-bold transition-all">
-                %
-              </button>
+              <VisibilityToggle product={p} onToggled={onReload} />
             </div>
           </div>
         )
       })}
 
       {products.length === 0 && (
-        <div className="py-16 text-center text-gray-400 text-sm">
-          No se encontraron productos
-        </div>
+        <div className="py-16 text-center text-gray-400 text-sm">No se encontraron productos</div>
       )}
     </div>
   )
 }
 
-// ── Vista GRILLA — tarjetas ───────────────────────────────────────────────────
-function GridView({ products, globalMarkup, onMarkup }) {
+// ── Vista GRILLA ──────────────────────────────────────────────────────────────
+function GridView({ products, globalMarkup, onMarkup, onReload }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
       {products.map(p => {
-        const costArs      = p.price_ars_cost ?? p.price_ars
-        const saleArs      = p.price_ars
-        const hasCustom    = p.markup_pct != null
+        const costArs  = p.price_ars_cost ?? p.price_ars
+        const saleArs  = p.price_ars
+        const hasCustom = p.markup_pct != null
+        const isActive  = p.active !== false && p.active !== 0
 
         return (
           <div key={p.id}
-            className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-all group">
+            className={`bg-white rounded-xl border overflow-hidden hover:shadow-md transition-all group
+              ${isActive ? 'border-gray-200' : 'border-red-200 opacity-60'}`}>
             {/* Imagen */}
             <div className="h-28 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
               {p.image_url
                 ? <img src={p.image_url} alt={p.name}
-                    className="h-full w-full object-contain p-2"
-                    loading="lazy" onError={e => { e.target.style.display = 'none' }} />
+                    className="h-full w-full object-contain p-2" loading="lazy"
+                    onError={e => { e.target.style.display = 'none' }} />
                 : <span className="text-4xl select-none">📦</span>
               }
-
-              {/* Acción hover */}
-              <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Acciones hover */}
+              <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                 <button onClick={() => onMarkup(p)} title="Ajustar markup"
-                  className="w-6 h-6 bg-blue-500 text-white rounded-full text-[10px] flex items-center justify-center hover:bg-blue-600">
+                  className="w-6 h-6 bg-blue-500 text-white rounded-full text-[10px]
+                             flex items-center justify-center hover:bg-blue-600">
                   %
                 </button>
               </div>
-
-              {p.featured && (
-                <span className="absolute top-1.5 left-1.5 text-[9px] bg-yellow-400 text-yellow-900 font-bold px-1.5 py-0.5 rounded">
-                  ⭐ Dest.
-                </span>
+              {/* Badge oculto */}
+              {!isActive && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                  <span className="text-xs bg-red-500 text-white font-bold px-2 py-1 rounded">🚫 Oculto</span>
+                </div>
               )}
-
-              {/* Badge stock 0 */}
-              {p.stock === 0 && (
+              {p.stock === 0 && isActive && (
                 <span className="absolute bottom-1.5 left-1.5 text-[9px] bg-red-500 text-white font-bold px-1.5 py-0.5 rounded">
                   Sin stock
                 </span>
@@ -254,29 +367,26 @@ function GridView({ products, globalMarkup, onMarkup }) {
             <div className="p-3">
               <h4 className="text-xs font-semibold mb-0.5 line-clamp-2 text-gray-800">{p.name}</h4>
               {p.brand && <p className="text-[10px] text-gray-400 mb-2">{p.brand} · {p.category}</p>}
-
-              <div className="space-y-0.5">
-                {/* Costo neto + IVA */}
+              <div className="space-y-0.5 mb-2">
                 <div className="flex justify-between items-center text-[11px]">
                   <span className="text-gray-400">Neto+IVA</span>
                   <span className="text-blue-600 font-semibold">{fmtARS(costArs)}</span>
                 </div>
-                {/* Precio venta */}
                 <div className="flex justify-between items-center">
                   <span className="text-[11px] text-gray-400 flex items-center gap-1">
                     Venta
                     {hasCustom
                       ? <span className="text-blue-500 text-[9px] font-bold">({p.markup_pct}%★)</span>
-                      : <span className="text-gray-300 text-[9px]">(global)</span>
-                    }
+                      : <span className="text-gray-300 text-[9px]">(global)</span>}
                   </span>
                   <span className="text-sm font-bold text-green-600">{fmtARS(saleArs)}</span>
                 </div>
               </div>
-
-              <div className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
-                <span>{p.stock > 10 ? '✅' : p.stock > 0 ? '⚠️' : '❌'}</span>
-                <span>{p.stock} en stock</span>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-gray-400">
+                  {p.stock > 10 ? '✅' : p.stock > 0 ? '⚠️' : '❌'} {p.stock} uds
+                </span>
+                <VisibilityToggle product={p} onToggled={onReload} />
               </div>
             </div>
           </div>
@@ -288,31 +398,40 @@ function GridView({ products, globalMarkup, onMarkup }) {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function Products() {
-  const [search,      setSearch]      = useState('')
+  const [search,          setSearch]          = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [markupModal, setMarkupModal] = useState(null)
-  const [vista,       setVista]       = useState('lista')   // 'lista' | 'grilla'
+  const [categoryFilter,  setCategoryFilter]  = useState('')
+  const [markupModal,     setMarkupModal]     = useState(null)
+  const [bulkModal,       setBulkModal]       = useState(null)
+  const [vista,           setVista]           = useState('lista')
 
-  // Debounce de búsqueda (300ms)
+  const categories = useCategories()
+
+  // Debounce búsqueda
   useMemo(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300)
     return () => clearTimeout(t)
   }, [search])
 
-  // Datos reales desde Azure SQL
   const { products, total, loading, error, globalMarkup, reload } = useAdminProducts({
-    buscar: debouncedSearch || undefined,
+    buscar:    debouncedSearch || undefined,
+    categoria: categoryFilter  || undefined,
   })
 
-  // Stats rápidas
   const stats = useMemo(() => ({
-    sinStock: products.filter(p => p.stock === 0).length,
+    sinStock:       products.filter(p => p.stock === 0).length,
     conMarkupCustom: products.filter(p => p.markup_pct != null).length,
+    ocultos:        products.filter(p => p.active === false || p.active === 0).length,
   }), [products])
+
+  // Categoría seleccionada (para el modal de markup masivo)
+  const selectedCategory = categoryFilter
+    ? categories.find(c => c.name === categoryFilter)
+    : null
 
   return (
     <>
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className="flex justify-between items-center mb-5 flex-wrap gap-3">
         <div>
           <h3 className="font-semibold text-lg text-gray-800">
@@ -324,58 +443,94 @@ export default function Products() {
           {!loading && (
             <p className="text-xs text-gray-400 mt-0.5">
               {stats.sinStock > 0 && <span className="text-red-400">{stats.sinStock} sin stock · </span>}
-              {stats.conMarkupCustom} con markup personalizado ·{' '}
+              {stats.ocultos > 0  && <span className="text-orange-400">{stats.ocultos} ocultos · </span>}
+              {stats.conMarkupCustom} con markup propio ·{' '}
               Markup global: <strong>{globalMarkup ?? '—'}%</strong>
             </p>
           )}
         </div>
-
-        {/* Toggle vista */}
-        <div className="flex items-center gap-2">
-          <div className="flex bg-gray-100 rounded-lg p-0.5">
-            <button
-              onClick={() => setVista('lista')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all
-                ${vista === 'lista' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              ☰ Lista
-            </button>
-            <button
-              onClick={() => setVista('grilla')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all
-                ${vista === 'grilla' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-              ⊞ Grilla
-            </button>
-          </div>
+        <div className="flex bg-gray-100 rounded-lg p-0.5">
+          <button onClick={() => setVista('lista')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all
+              ${vista === 'lista' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            ☰ Lista
+          </button>
+          <button onClick={() => setVista('grilla')}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all
+              ${vista === 'grilla' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            ⊞ Grilla
+          </button>
         </div>
       </div>
 
-      {/* ── Leyenda vista lista ─────────────────────────────────────────────── */}
+      {/* ── Leyenda ───────────────────────────────────────────────────────── */}
       {vista === 'lista' && !loading && (
-        <div className="flex items-center gap-4 mb-4 text-xs text-gray-500">
+        <div className="flex flex-wrap items-center gap-4 mb-4 text-xs text-gray-500">
           <span className="flex items-center gap-1.5">
-            <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-            Neto + IVA = precio que te cobra el mayorista (impuesto incluido)
+            <span className="font-bold text-blue-700">★</span> Markup personalizado por producto
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="font-bold text-blue-700">★</span>
-            Markup personalizado por producto
+            <span>👁</span> Visible en tienda — click para ocultar
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span>🚫</span> Oculto — click para mostrar
           </span>
         </div>
       )}
 
-      {/* ── Búsqueda ───────────────────────────────────────────────────────── */}
-      <div className="mb-4">
+      {/* ── Filtros ───────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-3 mb-4 items-end">
+        {/* Búsqueda */}
         <input
           type="text"
-          placeholder="🔍 Buscar por nombre, marca, categoría o SKU..."
+          placeholder="🔍 Buscar por nombre, marca, SKU..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full max-w-md px-4 py-2 border border-gray-200 rounded-lg text-sm
+          className="flex-1 min-w-[200px] max-w-sm px-4 py-2 border border-gray-200 rounded-lg text-sm
                      focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+
+        {/* Filtro por categoría */}
+        <div className="flex items-center gap-2">
+          <select
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm
+                       focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[180px]"
+          >
+            <option value="">Todas las categorías</option>
+            {categories.map(c => (
+              <option key={c.id} value={c.name}>
+                {c.name} ({c.product_count})
+              </option>
+            ))}
+          </select>
+
+          {/* Botón markup masivo — solo aparece cuando hay categoría seleccionada */}
+          {selectedCategory && (
+            <button
+              onClick={() => setBulkModal(selectedCategory)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 text-white text-sm
+                         font-semibold rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap"
+              title={`Cambiar markup de todos los productos de ${selectedCategory.name}`}
+            >
+              💹 Markup de «{selectedCategory.name}»
+            </button>
+          )}
+
+          {/* Limpiar filtros */}
+          {(categoryFilter || search) && (
+            <button
+              onClick={() => { setCategoryFilter(''); setSearch('') }}
+              className="text-xs text-gray-400 hover:text-gray-600 px-2 py-2 underline whitespace-nowrap"
+            >
+              Limpiar filtros
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* ── Estados loading / error ─────────────────────────────────────────── */}
+      {/* ── Estados ───────────────────────────────────────────────────────── */}
       {loading && (
         <div className="flex items-center justify-center h-48 text-gray-400">
           <div className="animate-spin text-3xl mr-3">⚙️</div>
@@ -397,22 +552,29 @@ export default function Products() {
         </div>
       )}
 
-      {/* ── Contenido ──────────────────────────────────────────────────────── */}
+      {/* ── Contenido ─────────────────────────────────────────────────────── */}
       {!loading && !error && (
         vista === 'lista'
-          ? <ListView    products={products} globalMarkup={globalMarkup} onMarkup={setMarkupModal} />
-          : <GridView    products={products} globalMarkup={globalMarkup} onMarkup={setMarkupModal} />
+          ? <ListView products={products} globalMarkup={globalMarkup}
+                      onMarkup={setMarkupModal} onReload={reload} />
+          : <GridView products={products} globalMarkup={globalMarkup}
+                      onMarkup={setMarkupModal} onReload={reload} />
       )}
 
-      {/* ── Modal markup ────────────────────────────────────────────────────── */}
+      {/* ── Modales ───────────────────────────────────────────────────────── */}
       {markupModal && (
         <MarkupModal
           product={markupModal}
           globalMarkup={globalMarkup}
-          onClose={(saved) => {
-            setMarkupModal(null)
-            if (saved) reload()   // recarga datos reales tras guardar
-          }}
+          onClose={(saved) => { setMarkupModal(null); if (saved) reload() }}
+        />
+      )}
+
+      {bulkModal && (
+        <BulkMarkupModal
+          category={bulkModal}
+          globalMarkup={globalMarkup}
+          onClose={(saved) => { setBulkModal(null); if (saved) reload() }}
         />
       )}
     </>
