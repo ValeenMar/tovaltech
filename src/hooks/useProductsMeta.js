@@ -12,7 +12,7 @@ export function useProductsMeta() {
   const [loading, setLoading]       = useState(true);
 
   useEffect(() => {
-    fetch('/api/products/meta')
+    fetch('/api/products-meta')
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(data => {
         if (data.categories?.length) {
