@@ -26,7 +26,7 @@ async function getCategories(pool) {
       c.created_at,
       c.updated_at,
       COUNT(p.id) AS product_count
-    FROM dbo.tovaltech_categories c
+    FROM dbo.tovaltech_products c
     LEFT JOIN dbo.tovaltech_products p ON p.category = c.name
     GROUP BY c.id, c.name, c.markup_pct, c.created_at, c.updated_at
     ORDER BY c.name ASC;
@@ -61,7 +61,7 @@ async function createCategory(pool, { name, markup_pct }) {
   // Verificar unicidad
   const exists = await pool.request()
     .input('name', cleanName)
-    .query(`SELECT id FROM dbo.tovaltech_categories WHERE name = @name`);
+    .query(`SELECT id FROM dbo.tovaltech_products WHERE name = @name`);
 
   if (exists.recordset.length) {
     return { status: 409, body: { error: `La categoría "${cleanName}" ya existe.` } };
@@ -71,7 +71,7 @@ async function createCategory(pool, { name, markup_pct }) {
     .input('name',       cleanName)
     .input('markup_pct', cleanMarkup)
     .query(`
-      INSERT INTO dbo.tovaltech_categories (name, markup_pct)
+      INSERT INTO dbo.tovaltech_products (name, markup_pct)
       OUTPUT INSERTED.id, INSERTED.name, INSERTED.markup_pct, INSERTED.created_at
       VALUES (@name, @markup_pct);
     `);
@@ -102,7 +102,7 @@ async function updateCategory(pool, { id, name, markup_pct }) {
   // Verificar que existe
   const existing = await pool.request()
     .input('id', numId)
-    .query(`SELECT id, name FROM dbo.tovaltech_categories WHERE id = @id`);
+    .query(`SELECT id, name FROM dbo.tovaltech_products WHERE id = @id`);
 
   if (!existing.recordset.length) {
     return { status: 404, body: { error: 'Categoría no encontrada.' } };
@@ -129,7 +129,7 @@ async function updateCategory(pool, { id, name, markup_pct }) {
     const nameExists = await pool.request()
       .input('name', newName)
       .input('id',   numId)
-      .query(`SELECT id FROM dbo.tovaltech_categories WHERE name = @name AND id <> @id`);
+      .query(`SELECT id FROM dbo.tovaltech_products WHERE name = @name AND id <> @id`);
 
     if (nameExists.recordset.length) {
       return { status: 409, body: { error: `La categoría "${newName}" ya existe.` } };
@@ -147,7 +147,7 @@ async function updateCategory(pool, { id, name, markup_pct }) {
     .input('name',       newName)
     .input('markup_pct', newMarkup)
     .query(`
-      UPDATE dbo.tovaltech_categories
+      UPDATE dbo.tovaltech_products
       SET name = @name, markup_pct = @markup_pct, updated_at = GETDATE()
       WHERE id = @id
     `);
@@ -164,7 +164,7 @@ async function deleteCategory(pool, { id, reassign_to }) {
 
   const existing = await pool.request()
     .input('id', numId)
-    .query(`SELECT id, name FROM dbo.tovaltech_categories WHERE id = @id`);
+    .query(`SELECT id, name FROM dbo.tovaltech_products WHERE id = @id`);
 
   if (!existing.recordset.length) {
     return { status: 404, body: { error: 'Categoría no encontrada.' } };
@@ -177,7 +177,7 @@ async function deleteCategory(pool, { id, reassign_to }) {
     // Verificar que la categoría destino exista
     const dest = await pool.request()
       .input('name', reassign_to)
-      .query(`SELECT id FROM dbo.tovaltech_categories WHERE name = @name`);
+      .query(`SELECT id FROM dbo.tovaltech_products WHERE name = @name`);
 
     if (!dest.recordset.length) {
       return { status: 404, body: { error: `La categoría destino "${reassign_to}" no existe.` } };
@@ -194,7 +194,7 @@ async function deleteCategory(pool, { id, reassign_to }) {
 
   await pool.request()
     .input('id', numId)
-    .query(`DELETE FROM dbo.tovaltech_categories WHERE id = @id`);
+    .query(`DELETE FROM dbo.tovaltech_products WHERE id = @id`);
 
   return {
     status: 200,
@@ -219,7 +219,7 @@ async function assignProducts(pool, { product_ids, category_name }) {
   if (cleanCat) {
     const exists = await pool.request()
       .input('name', cleanCat)
-      .query(`SELECT id FROM dbo.tovaltech_categories WHERE name = @name`);
+      .query(`SELECT id FROM dbo.tovaltech_products WHERE name = @name`);
     if (!exists.recordset.length) {
       return { status: 404, body: { error: `Categoría "${cleanCat}" no encontrada.` } };
     }
