@@ -37,6 +37,12 @@ module.exports = async function (context, req) {
       sets.push('active = @active');
     }
 
+    // ── Destacado (featured) ────────────────────────────────────────────────
+    if ('featured' in body) {
+      q.input('featured', body.featured ? 1 : 0);
+      sets.push('featured = @featured');
+    }
+
     if (!sets.length) {
       context.res = { status: 400, headers, body: { error: 'Nada para actualizar.' } };
       return;

@@ -75,7 +75,7 @@ function MarkupModal({ product, globalMarkup, onClose }) {
         </div>
         <div className="bg-gray-50 rounded-xl px-4 py-3 text-sm mb-4 space-y-1.5">
           <div className="flex justify-between text-gray-500">
-            <span>Neto + IVA (costo)</span><span>{fmtARS(costArs)}</span>
+            <span>Neto (costo)</span><span>{fmtARS(costArs)}</span>
           </div>
           <div className="flex justify-between text-gray-500">
             <span>Markup {effectiveMarkup}%{value === '' ? ' (global)' : ''}</span>
@@ -229,21 +229,61 @@ function VisibilityToggle({ product, onToggled }) {
   )
 }
 
+// ── Toggle destacado ──────────────────────────────────────────────────────────
+function FeaturedToggle({ product, onToggled }) {
+  const [loading, setLoading] = useState(false)
+  const isFeatured = product.featured === true || product.featured === 1
+
+  const toggle = async (e) => {
+    e.stopPropagation()
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/products/${product.id}/markup`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ featured: !isFeatured }),
+      })
+      if (!res.ok) throw new Error()
+      onToggled()
+    } catch {
+      // silencio
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <button
+      onClick={toggle}
+      disabled={loading}
+      title={isFeatured ? 'Quitar de destacados' : 'Marcar como destacado'}
+      className={`w-8 h-8 rounded-lg border text-sm transition-all flex items-center justify-center
+        ${loading ? 'opacity-40 cursor-wait' :
+          isFeatured
+            ? 'border-yellow-300 bg-yellow-50 text-yellow-500 hover:bg-gray-50 hover:border-gray-200 hover:text-gray-400'
+            : 'border-gray-200 bg-gray-50 text-gray-300 hover:bg-yellow-50 hover:border-yellow-300 hover:text-yellow-500'}`}
+    >
+      {loading ? '…' : '⭐'}
+    </button>
+  )
+}
+
 // ── Vista LISTA ───────────────────────────────────────────────────────────────
 function ListView({ products, globalMarkup, onMarkup, onReload }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="grid grid-cols-[1fr_110px_70px_105px_105px_100px_80px_72px] px-4 py-2.5
+      <div className="grid grid-cols-[1fr_110px_70px_105px_105px_100px_80px_72px_60px] px-4 py-2.5
                       bg-gray-50 border-b border-gray-200
                       text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
         <span>Producto</span>
         <span>Proveedor / Cat.</span>
         <span className="text-center">Stock</span>
         <span className="text-right">Costo USD</span>
-        <span className="text-right text-blue-600">Neto + IVA</span>
+        <span className="text-right text-blue-600">Neto</span>
         <span className="text-right">Markup</span>
         <span className="text-right text-green-600">Venta ARS</span>
         <span className="text-center">Tienda</span>
+        <span className="text-center">Dest.</span>
       </div>
 
       {products.map((p, i) => {
@@ -255,7 +295,7 @@ function ListView({ products, globalMarkup, onMarkup, onReload }) {
 
         return (
           <div key={p.id}
-            className={`grid grid-cols-[1fr_110px_70px_105px_105px_100px_80px_72px]
+            className={`grid grid-cols-[1fr_110px_70px_105px_105px_100px_80px_72px_60px]
                         px-4 py-3 text-sm border-b border-gray-100 last:border-0 items-center gap-1
                         ${!isActive ? 'opacity-50 bg-gray-50/80' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
 
@@ -286,7 +326,7 @@ function ListView({ products, globalMarkup, onMarkup, onReload }) {
               {fmtUSD(p.price_usd_cost ?? p.price_usd)}
             </div>
 
-            {/* Neto + IVA */}
+            {/* Neto */}
             <div className="text-right">
               <span className="text-xs font-bold text-blue-700 font-mono">{fmtARS(costArs)}</span>
             </div>
@@ -310,6 +350,11 @@ function ListView({ products, globalMarkup, onMarkup, onReload }) {
             {/* Toggle visibilidad */}
             <div className="flex justify-center">
               <VisibilityToggle product={p} onToggled={onReload} />
+            </div>
+
+            {/* Toggle destacado */}
+            <div className="flex justify-center">
+              <FeaturedToggle product={p} onToggled={onReload} />
             </div>
           </div>
         )
@@ -370,7 +415,7 @@ function GridView({ products, globalMarkup, onMarkup, onReload }) {
               {p.brand && <p className="text-[10px] text-gray-400 mb-2">{p.brand} · {p.category}</p>}
               <div className="space-y-0.5 mb-2">
                 <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-gray-400">Neto+IVA</span>
+                  <span className="text-gray-400">Neto</span>
                   <span className="text-blue-600 font-semibold">{fmtARS(costArs)}</span>
                 </div>
                 <div className="flex justify-between items-center">
@@ -387,7 +432,10 @@ function GridView({ products, globalMarkup, onMarkup, onReload }) {
                 <span className="text-[10px] text-gray-400">
                   {p.stock > 10 ? '✅' : p.stock > 0 ? '⚠️' : '❌'} {p.stock} uds
                 </span>
-                <VisibilityToggle product={p} onToggled={onReload} />
+                <div className="flex gap-1">
+                  <FeaturedToggle product={p} onToggled={onReload} />
+                  <VisibilityToggle product={p} onToggled={onReload} />
+                </div>
               </div>
             </div>
           </div>

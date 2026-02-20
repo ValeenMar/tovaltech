@@ -6,6 +6,7 @@ import Dashboard from '../pages/Dashboard';
 import Orders from '../pages/Orders';
 import Products from '../pages/Products';
 import Categories from '../pages/Categories';
+import Banners from '../pages/Banners';
 import Customers from '../pages/Customers';
 import Invoices from '../pages/Invoices';
 import Analytics from '../pages/Analytics';
@@ -16,6 +17,7 @@ const pages = {
   orders:     Orders,
   products:   Products,
   categories: Categories,
+  banners:    Banners,
   customers:  Customers,
   invoices:   Invoices,
   analytics:  Analytics,

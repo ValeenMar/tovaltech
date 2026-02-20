@@ -5,6 +5,7 @@ const navItems = [
   { key: 'orders',     icon: '📦', label: 'Pedidos',        badge: 12, section: 'Principal' },
   { key: 'products',   icon: '🏷️', label: 'Productos',      section: 'Principal' },
   { key: 'categories', icon: '🗂️', label: 'Categorías',     section: 'Principal' },
+  { key: 'banners',    icon: '🖼️', label: 'Inicio',         section: 'Principal' },
   { key: 'customers',  icon: '👥', label: 'Clientes',       section: 'Principal' },
   { key: 'invoices',   icon: '🧾', label: 'Facturas',       section: 'Sistema' },
   { key: 'analytics',  icon: '📈', label: 'Analíticas',     section: 'Sistema' },
