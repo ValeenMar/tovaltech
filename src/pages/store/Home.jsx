@@ -1,5 +1,6 @@
 // src/pages/store/Home.jsx
 import { useState, useEffect } from 'react'
+import { useSEO } from '../../hooks/useSEO'
 import { Link } from 'react-router-dom'
 import HeroSection from '../../components/store/HeroSection'
 import ProductCard from '../../components/store/ProductCard'
@@ -80,6 +81,7 @@ function YoutubeSection({ videoId }) {
 
 export default function Home() {
   const { products, loading } = useProducts({ limit: 8 })
+  useSEO({ title: 'Inicio', description: 'TovalTech — Tienda de tecnología y computación. Procesadores, placas de video, memorias RAM, almacenamiento, periféricos y más. Envíos a todo el país.' })
   const [youtubeId, setYoutubeId] = useState(null)
 
   // Cargar YouTube URL desde la API de banners (misma llamada que el hero)

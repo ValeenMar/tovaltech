@@ -2,6 +2,7 @@
 // Página de detalle de producto — /productos/:id
 
 import { useState, useEffect, useRef } from 'react';
+import { useSEO } from '../../hooks/useSEO';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import ProductCard from '../../components/store/ProductCard';
@@ -210,6 +211,12 @@ export default function ProductDetail() {
 
   const showImage = product.image_url && !imgError;
   const inStock   = product.stock > 0;
+
+  // SEO dinámico por producto
+  useSEO({
+    title:       product ? product.name : undefined,
+    description: product ? `${product.name}${product.brand ? " - " + product.brand : ""}. ${product.category ? "Categoría: " + product.category + "." : ""} Comprá online con envío a todo el país.` : undefined,
+  });
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, memo } from 'react';
+import { useSEO } from '../../hooks/useSEO';
 import ProductCard from '../../components/store/ProductCard';
 import { useProducts } from '../../hooks/useProducts';
 import { useProductsMeta } from '../../hooks/useProductsMeta';
@@ -157,6 +158,7 @@ export default function StoreCatalog() {
   const [mobileOpen, setMobileOpen]         = useState(false);
 
   const { categories } = useProductsMeta();
+  useSEO({ title: activeCategory !== "Todos" ? activeCategory : "Catálogo de Productos", description: "Explorá nuestro catálogo completo de tecnología y computación. Filtros por categoría, ordenamiento por precio y búsqueda instantánea." });
 
   const filters = useMemo(() => ({
     categoria: activeCategory !== 'Todos' ? activeCategory : '',

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useSEO } from '../../hooks/useSEO';
 import { useCart } from '../../context/CartContext';
 import CartItem from '../../components/store/CartItem';
 import { FREE_SHIPPING_THRESHOLD } from '../../utils/shipping';
@@ -8,6 +9,7 @@ const fmtARS = (n) =>
 
 export default function Cart() {
   const { cartItems, cartTotal, clearCart, cartCount } = useCart();
+  useSEO({ title: "Carrito de compras" });
 
   if (cartItems.length === 0) {
     return (
