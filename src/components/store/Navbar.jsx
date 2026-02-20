@@ -55,7 +55,6 @@ export default function Navbar() {
               )}
             </Link>
 
-            <Link to="/admin" className="text-xs text-gray-300 hover:text-gray-500">Admin</Link>
           </div>
         </div>
       </div>
