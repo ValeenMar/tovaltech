@@ -2,9 +2,11 @@ const fetch = require('node-fetch');
 const sql = require('mssql');
 const connectDB = require('../db');
 
-const ELIT_URL = process.env.ELIT_API_URL;
+const ELIT_URL   = process.env.ELIT_API_URL;
 const NEWBYTES_URL = process.env.NEWBYTES_API_URL;
-const DOLAR_URL = 'https://dolarapi.com/v1/dolares/oficial';
+const DOLAR_URL  = 'https://dolarapi.com/v1/dolares/oficial';
+
+// ── Helpers numéricos ──────────────────────────────────────────────────────────
 
 function parseNumber(value) {
   if (value === null || value === undefined) return null;
@@ -13,10 +15,8 @@ function parseNumber(value) {
 
   let normalized;
   if (s.includes(',')) {
-    // Formato europeo: 1.234,56 -> quitar puntos de miles, reemplazar coma decimal
     normalized = s.replace(/\./g, '').replace(',', '.');
   } else {
-    // Formato anglosajón: 145.11 -> usar directamente (NO quitar el punto)
     normalized = s.replace(/[^0-9.]/g, '');
   }
 
@@ -38,6 +38,8 @@ function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
+// ── Parser CSV propio (soporta campos entrecomillados) ────────────────────────
+
 function parseCsv(text, delimiter) {
   const rows = [];
   let row = [];
@@ -50,39 +52,25 @@ function parseCsv(text, delimiter) {
     if (inQuotes) {
       if (c === '"') {
         const next = text[i + 1];
-        if (next === '"') {
-          field += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
+        if (next === '"') { field += '"'; i += 1; }
+        else { inQuotes = false; }
       } else {
         field += c;
       }
       continue;
     }
 
-    if (c === '"') {
-      inQuotes = true;
-      continue;
-    }
-
-    if (c === delimiter) {
-      row.push(field);
-      field = '';
-      continue;
-    }
+    if (c === '"')      { inQuotes = true; continue; }
+    if (c === delimiter) { row.push(field); field = ''; continue; }
 
     if (c === '\n') {
-      row.push(field);
-      field = '';
+      row.push(field); field = '';
       if (row.length > 1 || (row.length === 1 && row[0].trim() !== '')) rows.push(row);
       row = [];
       continue;
     }
 
     if (c === '\r') continue;
-
     field += c;
   }
 
@@ -95,7 +83,6 @@ function rowsToObjects(rows) {
   if (!rows.length) return [];
   const header = rows[0].map((h) => String(h || '').trim());
   const out = [];
-
   for (let i = 1; i < rows.length; i += 1) {
     const r = rows[i];
     const obj = {};
@@ -106,6 +93,8 @@ function rowsToObjects(rows) {
   }
   return out;
 }
+
+// ── Fetchers ──────────────────────────────────────────────────────────────────
 
 async function fetchJson(url) {
   const res = await fetch(url);
@@ -119,28 +108,26 @@ async function fetchText(url) {
   return res.text();
 }
 
+// ── Mappers mayoristas ────────────────────────────────────────────────────────
+
 function mapElit(row, dolar) {
-  const sku = normalizeText(row.codigo_alfa);
-  const name = normalizeText(row.nombre);
+  const sku      = normalizeText(row.codigo_alfa);
+  const name     = normalizeText(row.nombre);
   const category = normalizeText(row.categoria);
-  const brand = normalizeText(row.marca);
+  const brand    = normalizeText(row.marca);
   const priceUsd = parseNumber(row.pvp_usd);
-  const stock = parseIntSafe(row.stock_total, 0);
+  const stock    = parseIntSafe(row.stock_total, 0);
   const imageUrl = normalizeText(row.imagen);
   const warranty = normalizeText(row.garantia);
 
   if (!sku || !name || !priceUsd) return null;
 
   return {
-    sku,
-    name,
-    category,
-    brand,
-    price_usd: round2(priceUsd),
-    price_ars: Math.max(0, Math.round(priceUsd * dolar)),
-    stock,
-    image_url: imageUrl,
-    provider: 'elit',
+    sku, name, category, brand,
+    price_usd:  round2(priceUsd),
+    price_ars:  Math.max(0, Math.round(priceUsd * dolar)),
+    stock, image_url: imageUrl,
+    provider:   'elit',
     warranty,
     dolar_rate: round2(dolar),
   };
@@ -148,12 +135,9 @@ function mapElit(row, dolar) {
 
 function mapNewBytes(row, dolar) {
   const sku      = normalizeText(row.CODIGO);
-  // Preferir DETALLE_USUARIO si está disponible (nombre personalizado del cliente)
   const name     = normalizeText(row.DETALLE_USUARIO || row.DETALLE);
-  // Preferir CATEGORIA_USUARIO si está disponible
   const category = normalizeText(row.CATEGORIA_USUARIO || row.CATEGORIA);
   const brand    = normalizeText(row.MARCA);
-  // Usar campos CON UTILIDAD que ya tienen markup aplicado
   const priceUsd = parseNumber(row['PRECIO USD CON UTILIDAD'] || row['PRECIO FINAL']);
   const priceArs = parseNumber(row['PRECIO PESOS CON UTILIDAD'] || row['PRECIO PESOS CON IVA']);
   const stock    = parseIntSafe(row.STOCK, 0);
@@ -163,19 +147,17 @@ function mapNewBytes(row, dolar) {
   if (!sku || !name || !priceUsd) return null;
 
   return {
-    sku,
-    name,
-    category,
-    brand,
-    price_usd: round2(priceUsd),
-    price_ars: Math.max(0, Math.round(priceArs ?? priceUsd * dolar)),
-    stock,
-    image_url: imageUrl,
-    provider: 'newbytes',
+    sku, name, category, brand,
+    price_usd:  round2(priceUsd),
+    price_ars:  Math.max(0, Math.round(priceArs ?? priceUsd * dolar)),
+    stock, image_url: imageUrl,
+    provider:   'newbytes',
     warranty,
     dolar_rate: round2(dolar),
   };
 }
+
+// ── Merge con staging table ───────────────────────────────────────────────────
 
 async function mergeProducts(pool, products) {
   if (!products.length) return { inserted: 0, updated: 0, total: 0 };
@@ -183,47 +165,39 @@ async function mergeProducts(pool, products) {
   await pool.request().batch(`
     IF OBJECT_ID('tempdb..#staging_products') IS NOT NULL DROP TABLE #staging_products;
     CREATE TABLE #staging_products (
-      sku NVARCHAR(100) NOT NULL,
-      name NVARCHAR(300) NOT NULL,
-      category NVARCHAR(100) NULL,
-      brand NVARCHAR(100) NULL,
-      price_usd DECIMAL(10,2) NOT NULL,
-      price_ars INT NOT NULL,
-      stock INT NOT NULL,
-      image_url NVARCHAR(500) NULL,
-      provider NVARCHAR(20) NULL,
-      warranty NVARCHAR(50) NULL,
-      dolar_rate DECIMAL(10,2) NULL
+      sku        NVARCHAR(100)  NOT NULL,
+      name       NVARCHAR(300)  NOT NULL,
+      category   NVARCHAR(100)  NULL,
+      brand      NVARCHAR(100)  NULL,
+      price_usd  DECIMAL(10,2)  NOT NULL,
+      price_ars  INT            NOT NULL,
+      stock      INT            NOT NULL,
+      image_url  NVARCHAR(500)  NULL,
+      provider   NVARCHAR(20)   NULL,
+      warranty   NVARCHAR(50)   NULL,
+      dolar_rate DECIMAL(10,2)  NULL
     );
   `);
 
   const table = new sql.Table('#staging_products');
   table.create = false;
-  table.columns.add('sku', sql.NVarChar(100), { nullable: false });
-  table.columns.add('name', sql.NVarChar(300), { nullable: false });
-  table.columns.add('category', sql.NVarChar(100), { nullable: true });
-  table.columns.add('brand', sql.NVarChar(100), { nullable: true });
-  table.columns.add('price_usd', sql.Decimal(10, 2), { nullable: false });
-  table.columns.add('price_ars', sql.Int, { nullable: false });
-  table.columns.add('stock', sql.Int, { nullable: false });
-  table.columns.add('image_url', sql.NVarChar(500), { nullable: true });
-  table.columns.add('provider', sql.NVarChar(20), { nullable: true });
-  table.columns.add('warranty', sql.NVarChar(50), { nullable: true });
-  table.columns.add('dolar_rate', sql.Decimal(10, 2), { nullable: true });
+  table.columns.add('sku',        sql.NVarChar(100),   { nullable: true });
+  table.columns.add('name',       sql.NVarChar(300),   { nullable: true });
+  table.columns.add('category',   sql.NVarChar(100),   { nullable: true });
+  table.columns.add('brand',      sql.NVarChar(100),   { nullable: true });
+  table.columns.add('price_usd',  sql.Decimal(10, 2),  { nullable: true });
+  table.columns.add('price_ars',  sql.Int,             { nullable: true });
+  table.columns.add('stock',      sql.Int,             { nullable: true });
+  table.columns.add('image_url',  sql.NVarChar(500),   { nullable: true });
+  table.columns.add('provider',   sql.NVarChar(20),    { nullable: true });
+  table.columns.add('warranty',   sql.NVarChar(50),    { nullable: true });
+  table.columns.add('dolar_rate', sql.Decimal(10, 2),  { nullable: true });
 
   for (const p of products) {
     table.rows.add(
-      p.sku,
-      p.name,
-      p.category,
-      p.brand,
-      p.price_usd,
-      p.price_ars,
-      p.stock,
-      p.image_url,
-      p.provider,
-      p.warranty,
-      p.dolar_rate
+      p.sku, p.name, p.category, p.brand,
+      p.price_usd, p.price_ars, p.stock,
+      p.image_url, p.provider, p.warranty, p.dolar_rate
     );
   }
 
@@ -233,24 +207,25 @@ async function mergeProducts(pool, products) {
     DECLARE @merge_output TABLE(action NVARCHAR(10));
 
     MERGE tovaltech_products AS t
-    USING #staging_products AS s
-      ON t.sku = s.sku
+    USING #staging_products AS s ON t.sku = s.sku
     WHEN MATCHED THEN
       UPDATE SET
-        t.name = s.name,
-        t.category = s.category,
-        t.brand = s.brand,
-        t.price_usd = s.price_usd,
-        t.price_ars = s.price_ars,
-        t.stock = s.stock,
-        t.image_url = s.image_url,
-        t.provider = s.provider,
-        t.warranty = s.warranty,
+        t.name       = s.name,
+        t.category   = s.category,
+        t.brand      = s.brand,
+        t.price_usd  = s.price_usd,
+        t.price_ars  = s.price_ars,
+        t.stock      = s.stock,
+        t.image_url  = s.image_url,
+        t.provider   = s.provider,
+        t.warranty   = s.warranty,
         t.dolar_rate = s.dolar_rate,
         t.updated_at = GETDATE()
     WHEN NOT MATCHED THEN
-      INSERT (sku, name, category, brand, price_usd, price_ars, stock, image_url, provider, warranty, dolar_rate, featured, created_at, updated_at)
-      VALUES (s.sku, s.name, s.category, s.brand, s.price_usd, s.price_ars, s.stock, s.image_url, s.provider, s.warranty, s.dolar_rate, 0, GETDATE(), GETDATE())
+      INSERT (sku, name, category, brand, price_usd, price_ars, stock,
+              image_url, provider, warranty, dolar_rate, featured, created_at, updated_at)
+      VALUES (s.sku, s.name, s.category, s.brand, s.price_usd, s.price_ars, s.stock,
+              s.image_url, s.provider, s.warranty, s.dolar_rate, 0, GETDATE(), GETDATE())
     OUTPUT $action INTO @merge_output;
 
     SELECT
@@ -263,9 +238,27 @@ async function mergeProducts(pool, products) {
   const row = result.recordset?.[0] || { inserted: 0, updated: 0, total: 0 };
   return {
     inserted: parseInt(row.inserted || 0, 10),
-    updated: parseInt(row.updated || 0, 10),
-    total: parseInt(row.total || 0, 10),
+    updated:  parseInt(row.updated  || 0, 10),
+    total:    parseInt(row.total    || 0, 10),
   };
+}
+
+// ── Sync de categorías nuevas (sync agrega automáticamente al catálogo) ────────
+
+async function syncNewCategories(pool, products) {
+  // Inserta en tovaltech_categories las categorías nuevas que lleguen del sync
+  // (solo las que no existen aún; no toca markup)
+  const cats = [...new Set(products.map(p => p.category).filter(Boolean))];
+  if (!cats.length) return;
+
+  for (const cat of cats) {
+    await pool.request()
+      .input('name', cat)
+      .query(`
+        IF NOT EXISTS (SELECT 1 FROM dbo.tovaltech_categories WHERE name = @name)
+          INSERT INTO dbo.tovaltech_categories (name) VALUES (@name);
+      `);
+  }
 }
 
 function chunk(arr, size) {
@@ -274,37 +267,59 @@ function chunk(arr, size) {
   return out;
 }
 
+// ── Handler principal ─────────────────────────────────────────────────────────
+
 module.exports = async function (context, req) {
-  // ── Validar variables de entorno ──────────────────────────────────────
+  const headers = { 'content-type': 'application/json' };
+
   if (!ELIT_URL || !NEWBYTES_URL) {
     context.res = {
-      status: 500,
-      headers: { 'content-type': 'application/json' },
-      body: { success: false, error: 'Faltan variables de entorno ELIT_API_URL o NEWBYTES_API_URL' },
+      status: 500, headers,
+      body: { success: false, error: 'Faltan variables ELIT_API_URL o NEWBYTES_API_URL' },
     };
     return;
   }
 
-  try {
-    // ... resto del código igual
+  const startTime = Date.now();
 
+  try {
+    // ── 1. Obtener datos de las APIs ───────────────────────────────────────
+    context.log.info('sync_start');
+
+    const [elitCsv, nbCsv, dolarData] = await Promise.all([
+      fetchText(ELIT_URL),
+      fetchText(NEWBYTES_URL),
+      fetchJson(DOLAR_URL),
+    ]);
+
+    // Dólar oficial — usar 'venta' como referencia, fallback a 1400
+    const dolar = parseNumber(dolarData?.venta) ?? parseNumber(dolarData?.promedio) ?? 1400;
+    context.log.info('sync_dolar', { dolar });
+
+    // ── 2. Parsear CSVs ────────────────────────────────────────────────────
     const elitObjs = rowsToObjects(parseCsv(elitCsv, ','));
-    const nbObjs = rowsToObjects(parseCsv(nbCsv, ';'));
+    const nbObjs   = rowsToObjects(parseCsv(nbCsv, ';'));
 
     const elitProducts = elitObjs.map((r) => mapElit(r, dolar)).filter(Boolean);
-    const nbProducts = nbObjs.map((r) => mapNewBytes(r, dolar)).filter(Boolean);
+    const nbProducts   = nbObjs.map((r) => mapNewBytes(r, dolar)).filter(Boolean);
 
+    context.log.info('sync_parsed', {
+      elit_raw: elitObjs.length, elit_ok: elitProducts.length,
+      nb_raw:   nbObjs.length,   nb_ok:   nbProducts.length,
+    });
+
+    // ── 3. Merge en Azure SQL ──────────────────────────────────────────────
     const pool = await connectDB();
 
     let elitMerged = { inserted: 0, updated: 0, total: 0 };
-    let nbMerged = { inserted: 0, updated: 0, total: 0 };
+    let nbMerged   = { inserted: 0, updated: 0, total: 0 };
 
     for (const ch of chunk(elitProducts, 2000)) {
       const r = await mergeProducts(pool, ch);
       elitMerged = {
         inserted: elitMerged.inserted + r.inserted,
-        updated: elitMerged.updated + r.updated,
-        total: elitMerged.total + r.total,
+        updated:  elitMerged.updated  + r.updated,
+        total:    elitMerged.total    + r.total,
       };
     }
 
@@ -312,27 +327,60 @@ module.exports = async function (context, req) {
       const r = await mergeProducts(pool, ch);
       nbMerged = {
         inserted: nbMerged.inserted + r.inserted,
-        updated: nbMerged.updated + r.updated,
-        total: nbMerged.total + r.total,
+        updated:  nbMerged.updated  + r.updated,
+        total:    nbMerged.total    + r.total,
       };
     }
 
-    context.res = {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-      body: {
-        success: true,
-        dolar_oficial: dolar,
-        elit: { ...elitMerged, parsed: elitProducts.length },
-        newbytes: { ...nbMerged, parsed: nbProducts.length },
-        total: elitMerged.total + nbMerged.total,
-        timestamp: new Date().toISOString(),
-      },
+    // ── 4. Sincronizar categorías nuevas automáticamente ──────────────────
+    const allProducts = [...elitProducts, ...nbProducts];
+    await syncNewCategories(pool, allProducts);
+
+    // ── 5. Guardar resultado en settings para que el admin lo pueda ver ───
+    const duration = Math.round((Date.now() - startTime) / 1000);
+    const syncResult = {
+      success:      true,
+      dolar_oficial: dolar,
+      elit:          { ...elitMerged, parsed: elitProducts.length },
+      newbytes:      { ...nbMerged,   parsed: nbProducts.length },
+      total:         elitMerged.total + nbMerged.total,
+      duration_sec:  duration,
+      timestamp:     new Date().toISOString(),
     };
+
+    await pool.request()
+      .input('value', JSON.stringify(syncResult))
+      .query(`
+        UPDATE dbo.tovaltech_settings
+        SET value = @value, updated_at = GETDATE()
+        WHERE key_name = 'last_sync_result'
+      `);
+
+    context.log.info('sync_complete', syncResult);
+
+    context.res = { status: 200, headers, body: syncResult };
+
   } catch (err) {
+    context.log.error('sync_error', err.message);
+
+    // Guardar también el error en settings
+    try {
+      const pool = await connectDB();
+      await pool.request()
+        .input('value', JSON.stringify({
+          success:   false,
+          error:     err.message,
+          timestamp: new Date().toISOString(),
+        }))
+        .query(`
+          UPDATE dbo.tovaltech_settings
+          SET value = @value, updated_at = GETDATE()
+          WHERE key_name = 'last_sync_result'
+        `);
+    } catch (_) { /* si falla el log no rompemos nada */ }
+
     context.res = {
-      status: 500,
-      headers: { 'content-type': 'application/json' },
+      status: 500, headers,
       body: { success: false, error: err.message, stack: err.stack },
     };
   }

@@ -1,8 +1,14 @@
 import { useApp } from '../../context/AppContext'
 
 const pageTitles = {
-  dashboard: 'Dashboard', orders: 'Pedidos', products: 'Productos',
-  customers: 'Clientes', invoices: 'Facturas', analytics: 'Analíticas', settings: 'Configuración',
+  dashboard:  'Dashboard',
+  orders:     'Pedidos',
+  products:   'Productos',
+  categories: 'Categorías',
+  customers:  'Clientes',
+  invoices:   'Facturas',
+  analytics:  'Analíticas',
+  settings:   'Configuración',
 }
 
 export default function Topbar() {

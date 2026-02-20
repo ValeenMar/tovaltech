@@ -5,24 +5,26 @@ import Modal from '../components/ui/Modal';
 import Dashboard from '../pages/Dashboard';
 import Orders from '../pages/Orders';
 import Products from '../pages/Products';
+import Categories from '../pages/Categories';
 import Customers from '../pages/Customers';
 import Invoices from '../pages/Invoices';
 import Analytics from '../pages/Analytics';
 import Settings from '../pages/Settings';
 
 const pages = {
-  dashboard: Dashboard,
-  orders: Orders,
-  products: Products,
-  customers: Customers,
-  invoices: Invoices,
-  analytics: Analytics,
-  settings: Settings,
+  dashboard:  Dashboard,
+  orders:     Orders,
+  products:   Products,
+  categories: Categories,
+  customers:  Customers,
+  invoices:   Invoices,
+  analytics:  Analytics,
+  settings:   Settings,
 };
 
 export default function AdminLayout() {
-const { currentPage } = useApp();
-const Page = pages[currentPage] || Dashboard;
+  const { currentPage } = useApp();
+  const Page = pages[currentPage] || Dashboard;
 
   return (
     <div className="flex h-screen bg-gray-100">

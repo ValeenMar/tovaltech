@@ -38,6 +38,10 @@
     {
       "route": "/api/products-markup*",
       "allowedRoles": ["admin"]
+    },
+    {
+      "route": "/api/categories*",
+      "allowedRoles": ["admin"]
     }
   ],
   "responseOverrides": {

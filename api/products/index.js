@@ -1,6 +1,7 @@
 // api/products/index.js
 // Endpoint público para la tienda + admin.
-// ?admin=1 → muestra todos los productos (sin filtro stock > 0) para el panel admin.
+// Jerarquía de markup: producto individual > categoría > global
+// ?admin=1 → muestra todos los productos (sin filtro stock > 0)
 
 const connectDB = require('../db');
 
@@ -22,14 +23,23 @@ module.exports = async function (context, req) {
     const limit     = clamp(toInt(req.query.limit,  24), 1, 500);
     const offset    = Math.max(0, toInt(req.query.offset, 0));
 
-    // Leer markup global
+    // ── Markup global ──────────────────────────────────────────────────────
     const settingsRes = await pool.request().query(`
       SELECT value FROM dbo.tovaltech_settings WHERE key_name = 'global_markup_pct'
     `);
-    const globalMarkup = parseFloat(settingsRes.recordset?.[0]?.value ?? '0') / 100;
+    const globalMarkupPct = parseFloat(settingsRes.recordset?.[0]?.value ?? '0');
+    const globalMarkup    = globalMarkupPct / 100;
 
-    // Filtros WHERE
-    // Admin ve todo (incluso sin stock), tienda solo con stock > 0
+    // ── Markup por categoría ───────────────────────────────────────────────
+    const catRes = await pool.request().query(`
+      SELECT name, markup_pct FROM dbo.tovaltech_categories WHERE markup_pct IS NOT NULL
+    `);
+    const categoryMarkup = {};
+    for (const row of catRes.recordset) {
+      categoryMarkup[row.name] = parseFloat(row.markup_pct) / 100;
+    }
+
+    // ── Filtros WHERE ──────────────────────────────────────────────────────
     const where = isAdmin ? [] : ['stock > 0'];
     if (categoria) where.push('category = @categoria');
     if (marca)     where.push('brand = @marca');
@@ -37,16 +47,18 @@ module.exports = async function (context, req) {
     if (buscar)    where.push('(name LIKE @buscar OR brand LIKE @buscar OR sku LIKE @buscar OR category LIKE @buscar)');
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-    // Contar total
+    // ── Count ──────────────────────────────────────────────────────────────
     const countReq = pool.request();
     if (categoria) countReq.input('categoria', categoria);
     if (marca)     countReq.input('marca',     marca);
     if (proveedor) countReq.input('proveedor', proveedor);
     if (buscar)    countReq.input('buscar',    `%${buscar}%`);
-    const count = await countReq.query(`SELECT COUNT(1) AS total FROM dbo.tovaltech_products ${whereSql}`);
+    const count = await countReq.query(
+      `SELECT COUNT(1) AS total FROM dbo.tovaltech_products ${whereSql}`
+    );
     const total = count.recordset?.[0]?.total ?? 0;
 
-    // Traer items
+    // ── Items ──────────────────────────────────────────────────────────────
     const itemsReq = pool.request();
     if (categoria) itemsReq.input('categoria', categoria);
     if (marca)     itemsReq.input('marca',     marca);
@@ -63,11 +75,21 @@ module.exports = async function (context, req) {
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 
-    // Aplicar markup a cada producto
+    // ── Aplicar markup — jerarquía: producto > categoría > global ──────────
     const products = (items.recordset || []).map(p => {
-      const effectiveMarkup = p.markup_pct !== null && p.markup_pct !== undefined
-        ? p.markup_pct / 100
-        : globalMarkup;
+      let effectiveMarkup;
+      let markupSource; // para el admin: saber de dónde viene el markup
+
+      if (p.markup_pct !== null && p.markup_pct !== undefined) {
+        effectiveMarkup = p.markup_pct / 100;
+        markupSource    = 'product';
+      } else if (p.category && categoryMarkup[p.category] !== undefined) {
+        effectiveMarkup = categoryMarkup[p.category];
+        markupSource    = 'category';
+      } else {
+        effectiveMarkup = globalMarkup;
+        markupSource    = 'global';
+      }
 
       const multiplier     = 1 + effectiveMarkup;
       const price_ars_sale = Math.round((p.price_ars ?? 0) * multiplier);
@@ -78,18 +100,25 @@ module.exports = async function (context, req) {
         // Precios de venta (con markup aplicado)
         price_ars: price_ars_sale,
         price_usd: price_usd_sale,
-        // Precios de costo del mayorista (neto + IVA incluido)
+        // Precios de costo del mayorista
         price_ars_cost: p.price_ars,
         price_usd_cost: p.price_usd,
-        // Markup efectivo aplicado
+        // Info de markup (útil para admin)
         markup_applied: Math.round(effectiveMarkup * 100 * 10) / 10,
+        markup_source:  markupSource,
       };
     });
 
     context.res = {
       status: 200,
       headers: { 'content-type': 'application/json' },
-      body: { items: products, total, limit, offset, global_markup_pct: globalMarkup * 100 },
+      body: {
+        items: products,
+        total,
+        limit,
+        offset,
+        global_markup_pct: globalMarkupPct,
+      },
     };
 
   } catch (err) {
@@ -97,7 +126,6 @@ module.exports = async function (context, req) {
     context.res = {
       status: 500,
       headers: { 'content-type': 'application/json' },
-      // No exponemos el stack en producción
       body: { error: 'products_failed', message: 'Error al obtener productos.' },
     };
   }

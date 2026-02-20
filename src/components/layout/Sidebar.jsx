@@ -4,6 +4,7 @@ const navItems = [
   { key: 'dashboard',  icon: '📊', label: 'Dashboard',      section: 'Principal' },
   { key: 'orders',     icon: '📦', label: 'Pedidos',        badge: 12, section: 'Principal' },
   { key: 'products',   icon: '🏷️', label: 'Productos',      section: 'Principal' },
+  { key: 'categories', icon: '🗂️', label: 'Categorías',     section: 'Principal' },
   { key: 'customers',  icon: '👥', label: 'Clientes',       section: 'Principal' },
   { key: 'invoices',   icon: '🧾', label: 'Facturas',       section: 'Sistema' },
   { key: 'analytics',  icon: '📈', label: 'Analíticas',     section: 'Sistema' },
@@ -72,12 +73,8 @@ export default function Sidebar() {
               ${!sidebarOpen ? 'lg:justify-center lg:px-0' : ''}`}
           >
             <span className="text-lg min-w-[24px] text-center">🛒</span>
-            {sidebarOpen && (
-              <span className="flex-1">Ver tienda</span>
-            )}
-            {sidebarOpen && (
-              <span className="text-white/40 text-xs">↗</span>
-            )}
+            {sidebarOpen && <span className="flex-1">Ver tienda</span>}
+            {sidebarOpen && <span className="text-white/40 text-xs">↗</span>}
           </a>
         </div>
       </aside>
