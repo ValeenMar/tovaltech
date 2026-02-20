@@ -1,59 +1,137 @@
-// api/product/index.js
-// GET /api/product?id=123  → devuelve un producto por ID con markup aplicado
+// api/products/index.js
+// Endpoint público para la tienda + admin.
+// Jerarquía de markup: producto individual > categoría > global
+// ?admin=1 → muestra todos los productos (sin filtro stock > 0)
 
 const connectDB = require('../db');
 
+function toInt(v, fallback) {
+  const n = parseInt(String(v ?? ''), 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
 module.exports = async function (context, req) {
-  const headers = { 'content-type': 'application/json' };
-
   try {
-    const id = parseInt(req.query.id || '', 10);
-    if (!id) {
-      context.res = { status: 400, headers, body: { error: 'Falta el parámetro id' } };
-      return;
-    }
-
     const pool = await connectDB();
 
-    // Markup global
+    const isAdmin   = req.query.admin === '1';
+    const categoria = (req.query.categoria || '').trim();
+    const marca     = (req.query.marca     || '').trim();
+    const proveedor = (req.query.proveedor || '').trim();
+    const buscar    = (req.query.buscar    || '').trim();
+    const limit     = clamp(toInt(req.query.limit,  24), 1, 500);
+    const offset    = Math.max(0, toInt(req.query.offset, 0));
+
+    // ── Markup global ──────────────────────────────────────────────────────
     const settingsRes = await pool.request().query(`
       SELECT value FROM dbo.tovaltech_settings WHERE key_name = 'global_markup_pct'
     `);
-    const globalMarkup = parseFloat(settingsRes.recordset?.[0]?.value ?? '0') / 100;
+    const globalMarkupPct = parseFloat(settingsRes.recordset?.[0]?.value ?? '0');
+    const globalMarkup    = globalMarkupPct / 100;
 
-    // Producto
-    const result = await pool.request()
-      .input('id', id)
-      .query(`SELECT * FROM dbo.tovaltech_products WHERE id = @id`);
-
-    const p = result.recordset?.[0];
-    if (!p) {
-      context.res = { status: 404, headers, body: { error: 'Producto no encontrado' } };
-      return;
+    // ── Markup por categoría ───────────────────────────────────────────────
+    // Si la tabla no existe o falla, degradamos a markup global sin romper el endpoint
+    const categoryMarkup = {};
+    try {
+      const catRes = await pool.request().query(`
+        SELECT name, markup_pct FROM dbo.tovaltech_categories WHERE markup_pct IS NOT NULL
+      `);
+      for (const row of catRes.recordset) {
+        categoryMarkup[row.name] = parseFloat(row.markup_pct) / 100;
+      }
+    } catch (catErr) {
+      context.log.warn('category_markup_fetch_failed', catErr.message);
     }
 
-    const effectiveMarkup = p.markup_pct !== null && p.markup_pct !== undefined
-      ? p.markup_pct / 100
-      : globalMarkup;
+    // ── Filtros WHERE ──────────────────────────────────────────────────────
+    const where = isAdmin ? [] : ['stock > 0'];
+    if (categoria) where.push('category = @categoria');
+    if (marca)     where.push('brand = @marca');
+    if (proveedor) where.push('provider = @proveedor');
+    if (buscar)    where.push('(name LIKE @buscar OR brand LIKE @buscar OR sku LIKE @buscar OR category LIKE @buscar)');
+    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-    const multiplier = 1 + effectiveMarkup;
+    // ── Count ──────────────────────────────────────────────────────────────
+    const countReq = pool.request();
+    if (categoria) countReq.input('categoria', categoria);
+    if (marca)     countReq.input('marca',     marca);
+    if (proveedor) countReq.input('proveedor', proveedor);
+    if (buscar)    countReq.input('buscar',    `%${buscar}%`);
+    const count = await countReq.query(
+      `SELECT COUNT(1) AS total FROM dbo.tovaltech_products ${whereSql}`
+    );
+    const total = count.recordset?.[0]?.total ?? 0;
 
-    const product = {
-      ...p,
-      price_ars:      Math.round((p.price_ars ?? 0) * multiplier),
-      price_usd:      Math.round((p.price_usd ?? 0) * multiplier * 100) / 100,
-      price_ars_cost: p.price_ars,
-      price_usd_cost: p.price_usd,
-      markup_applied: Math.round(effectiveMarkup * 100 * 10) / 10,
+    // ── Items ──────────────────────────────────────────────────────────────
+    const itemsReq = pool.request();
+    if (categoria) itemsReq.input('categoria', categoria);
+    if (marca)     itemsReq.input('marca',     marca);
+    if (proveedor) itemsReq.input('proveedor', proveedor);
+    if (buscar)    itemsReq.input('buscar',    `%${buscar}%`);
+    itemsReq.input('offset', offset);
+    itemsReq.input('limit',  limit);
+
+    const items = await itemsReq.query(`
+      SELECT *
+      FROM dbo.tovaltech_products
+      ${whereSql}
+      ORDER BY featured DESC, updated_at DESC, id DESC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `);
+
+    // ── Aplicar markup — jerarquía: producto > categoría > global ──────────
+    const products = (items.recordset || []).map(p => {
+      let effectiveMarkup;
+      let markupSource; // para el admin: saber de dónde viene el markup
+
+      if (p.markup_pct !== null && p.markup_pct !== undefined) {
+        effectiveMarkup = p.markup_pct / 100;
+        markupSource    = 'product';
+      } else if (p.category && categoryMarkup[p.category] !== undefined) {
+        effectiveMarkup = categoryMarkup[p.category];
+        markupSource    = 'category';
+      } else {
+        effectiveMarkup = globalMarkup;
+        markupSource    = 'global';
+      }
+
+      const multiplier     = 1 + effectiveMarkup;
+      const price_ars_sale = Math.round((p.price_ars ?? 0) * multiplier);
+      const price_usd_sale = Math.round((p.price_usd ?? 0) * multiplier * 100) / 100;
+
+      return {
+        ...p,
+        // Precios de venta (con markup aplicado)
+        price_ars: price_ars_sale,
+        price_usd: price_usd_sale,
+        // Precios de costo del mayorista
+        price_ars_cost: p.price_ars,
+        price_usd_cost: p.price_usd,
+        // Info de markup (útil para admin)
+        markup_applied: Math.round(effectiveMarkup * 100 * 10) / 10,
+        markup_source:  markupSource,
+      };
+    });
+
+    context.res = {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+      body: {
+        items: products,
+        total,
+        limit,
+        offset,
+        global_markup_pct: globalMarkupPct,
+      },
     };
 
-    context.res = { status: 200, headers, body: product };
-
   } catch (err) {
-    context.log.error('product_error', err.message);
+    context.log.error('products_failed', err);
     context.res = {
-      status: 500, headers,
-      body: { error: 'product_failed', message: 'Error al obtener el producto.' },
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+      body: { error: 'products_failed', message: 'Error al obtener productos.' },
     };
   }
 };
