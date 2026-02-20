@@ -3,6 +3,7 @@
 // v2: markup editable inline en cada fila + botón "Ver productos" con filtro cross-page.
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 
 // ── Hook: carga categorías ──────────────────────────────────────────────────
@@ -628,7 +629,8 @@ function CategoryRow({ cat, allCategories, globalMarkup, onReload, onViewProduct
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function Categories() {
   const { categories, loading, error, reload } = useCategories()
-  const { setCurrentPage, setAdminCategoryFilter } = useApp()
+  const { setAdminCategoryFilter } = useApp()
+  const navigate = useNavigate()
   const [showCreate,   setShowCreate]   = useState(false)
   const [search,       setSearch]       = useState('')
   const [globalMarkup, setGlobalMarkup] = useState(null)
@@ -650,7 +652,7 @@ export default function Categories() {
   // Navegar a la página de Productos pre-filtrada por categoría
   const handleViewProducts = (categoryName) => {
     setAdminCategoryFilter(categoryName)
-    setCurrentPage('products')
+    navigate('/admin/products')
   }
 
   return (

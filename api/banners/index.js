@@ -1,6 +1,6 @@
 // api/banners/index.js
 // GET  /api/banners          → lista banners (store: solo activos; admin: todos)
-// POST /api/banners          → { action: 'create'|'update'|'delete'|'reorder' }
+// POST /api/banners          → { action: 'create'|'update'|'delete'|'set_youtube'|'set_dimensions' }
 
 const connectDB = require('../db');
 const headers = { 'content-type': 'application/json' };
@@ -20,18 +20,30 @@ module.exports = async function (context, req) {
         ORDER BY sort_order ASC, id ASC
       `);
 
-      // También traer el youtube_url de settings
+      // Traer configuración de settings (youtube + dimensiones)
       let youtubeUrl = '';
+      let bannerWidth  = 1440;
+      let bannerHeight = 500;
       try {
-        const ytRes = await pool.request().query(`
-          SELECT value FROM dbo.tovaltech_settings WHERE key_name = 'home_youtube_url'
+        const settingsRes = await pool.request().query(`
+          SELECT key_name, value FROM dbo.tovaltech_settings
+          WHERE key_name IN ('home_youtube_url', 'banner_width', 'banner_height')
         `);
-        youtubeUrl = ytRes.recordset?.[0]?.value ?? '';
-      } catch { /* la row puede no existir */ }
+        for (const row of settingsRes.recordset || []) {
+          if (row.key_name === 'home_youtube_url') youtubeUrl   = row.value ?? '';
+          if (row.key_name === 'banner_width')     bannerWidth  = parseInt(row.value, 10) || 1440;
+          if (row.key_name === 'banner_height')    bannerHeight = parseInt(row.value, 10) || 500;
+        }
+      } catch { /* rows pueden no existir */ }
 
       context.res = {
         status: 200, headers,
-        body: { banners: result.recordset || [], youtube_url: youtubeUrl },
+        body: {
+          banners: result.recordset || [],
+          youtube_url: youtubeUrl,
+          banner_width:  bannerWidth,
+          banner_height: bannerHeight,
+        },
       };
       return;
     }
@@ -44,20 +56,22 @@ module.exports = async function (context, req) {
       // ── Guardar YouTube URL ────────────────────────────────────────────────
       if (action === 'set_youtube') {
         const url = String(body.youtube_url ?? '').trim();
-        // Upsert en settings
-        const exists = await pool.request().query(
-          `SELECT key_name FROM dbo.tovaltech_settings WHERE key_name = 'home_youtube_url'`
-        );
-        if (exists.recordset.length) {
-          await pool.request()
-            .input('v', url)
-            .query(`UPDATE dbo.tovaltech_settings SET value=@v, updated_at=GETDATE() WHERE key_name='home_youtube_url'`);
-        } else {
-          await pool.request()
-            .input('v', url)
-            .query(`INSERT INTO dbo.tovaltech_settings(key_name,value,description) VALUES('home_youtube_url',@v,'URL YouTube para el inicio')`);
-        }
+        await upsertSetting(pool, 'home_youtube_url', url, 'URL YouTube para el inicio');
         context.res = { status: 200, headers, body: { success: true } };
+        return;
+      }
+
+      // ── Guardar dimensiones del hero ───────────────────────────────────────
+      if (action === 'set_dimensions') {
+        const w = parseInt(body.banner_width,  10);
+        const h = parseInt(body.banner_height, 10);
+        if (!Number.isFinite(w) || !Number.isFinite(h) || w < 100 || h < 50) {
+          context.res = { status: 400, headers, body: { error: 'Dimensiones inválidas.' } };
+          return;
+        }
+        await upsertSetting(pool, 'banner_width',  String(w), 'Ancho del hero en px');
+        await upsertSetting(pool, 'banner_height', String(h), 'Alto del hero en px');
+        context.res = { status: 200, headers, body: { success: true, banner_width: w, banner_height: h } };
         return;
       }
 
@@ -133,3 +147,22 @@ module.exports = async function (context, req) {
     context.res = { status: 500, headers, body: { error: 'banners_failed', message: err.message } };
   }
 };
+
+// ── Helper: upsert en tovaltech_settings ─────────────────────────────────────
+async function upsertSetting(pool, keyName, value, description) {
+  const exists = await pool.request()
+    .input('k', keyName)
+    .query(`SELECT key_name FROM dbo.tovaltech_settings WHERE key_name = @k`);
+  if (exists.recordset.length) {
+    await pool.request()
+      .input('k', keyName)
+      .input('v', value)
+      .query(`UPDATE dbo.tovaltech_settings SET value=@v, updated_at=GETDATE() WHERE key_name=@k`);
+  } else {
+    await pool.request()
+      .input('k', keyName)
+      .input('v', value)
+      .input('d', description || '')
+      .query(`INSERT INTO dbo.tovaltech_settings(key_name,value,description) VALUES(@k,@v,@d)`);
+  }
+}

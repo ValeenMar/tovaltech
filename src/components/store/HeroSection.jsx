@@ -1,6 +1,7 @@
 // src/components/store/HeroSection.jsx
 // Carrusel de banners gestionado desde el admin.
-// Si no hay banners activos → muestra el hero estático original.
+// - Dimensiones: configurables desde admin (banner_width x banner_height)
+// - Si no hay banners activos → muestra el hero estático original.
 
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
@@ -42,11 +43,10 @@ function DefaultHero() {
 }
 
 // ── Carrusel ──────────────────────────────────────────────────────────────────
-function Carousel({ banners }) {
-  const [current, setCurrent]   = useState(0)
-  const [paused,  setPaused]    = useState(false)
-  const timerRef  = useRef(null)
-  const total     = banners.length
+function Carousel({ banners, width, height }) {
+  const [current, setCurrent] = useState(0)
+  const [paused,  setPaused]  = useState(false)
+  const total = banners.length
 
   const goTo = (idx) => setCurrent((idx + total) % total)
   const prev = () => goTo(current - 1)
@@ -55,20 +55,16 @@ function Carousel({ banners }) {
   // Auto-avance
   useEffect(() => {
     if (total <= 1 || paused) return
-    timerRef.current = setInterval(() => setCurrent(c => (c + 1) % total), INTERVAL)
-    return () => clearInterval(timerRef.current)
+    const t = setInterval(() => setCurrent(c => (c + 1) % total), INTERVAL)
+    return () => clearInterval(t)
   }, [total, paused, current])
 
-  const banner = banners[current]
-  const Wrapper = banner.link_url ? 'a' : 'div'
-  const wrapperProps = banner.link_url
-    ? { href: banner.link_url, ...(banner.link_url.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {}) }
-    : {}
+  const ratio = `${width} / ${height}`
 
   return (
     <section
       className="relative w-full overflow-hidden select-none"
-      style={{ aspectRatio: '1440 / 500', maxHeight: '500px' }}
+      style={{ aspectRatio: ratio, maxHeight: `${height}px` }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
@@ -83,13 +79,11 @@ function Carousel({ banners }) {
             <a href={b.link_url} {...(b.link_url.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                className="block w-full h-full">
               <img src={b.image_url} alt={b.title || `Banner ${i + 1}`}
-                   className="w-full h-full object-cover"
-                   draggable={false} />
+                   className="w-full h-full object-cover" draggable={false} />
             </a>
           ) : (
             <img src={b.image_url} alt={b.title || `Banner ${i + 1}`}
-                 className="w-full h-full object-cover"
-                 draggable={false} />
+                 className="w-full h-full object-cover" draggable={false} />
           )}
 
           {/* Texto superpuesto */}
@@ -111,17 +105,13 @@ function Carousel({ banners }) {
           <button onClick={prev}
             className="absolute left-3 top-1/2 -translate-y-1/2 z-30
                        w-10 h-10 bg-black/30 hover:bg-black/50 text-white rounded-full
-                       flex items-center justify-center transition-colors backdrop-blur-sm"
-            aria-label="Anterior">
-            ‹
-          </button>
+                       flex items-center justify-center transition-colors backdrop-blur-sm text-xl"
+            aria-label="Anterior">‹</button>
           <button onClick={next}
             className="absolute right-3 top-1/2 -translate-y-1/2 z-30
                        w-10 h-10 bg-black/30 hover:bg-black/50 text-white rounded-full
-                       flex items-center justify-center transition-colors backdrop-blur-sm"
-            aria-label="Siguiente">
-            ›
-          </button>
+                       flex items-center justify-center transition-colors backdrop-blur-sm text-xl"
+            aria-label="Siguiente">›</button>
         </>
       )}
 
@@ -145,16 +135,23 @@ function Carousel({ banners }) {
 
 // ── Export principal ──────────────────────────────────────────────────────────
 export default function HeroSection() {
-  const [banners, setBanners] = useState(null) // null = cargando
+  const [banners,      setBanners]      = useState(null) // null = cargando
+  const [bannerWidth,  setBannerWidth]  = useState(1440)
+  const [bannerHeight, setBannerHeight] = useState(500)
 
   useEffect(() => {
     fetch('/api/banners')
       .then(r => r.ok ? r.json() : { banners: [] })
-      .then(d => setBanners(d.banners || []))
+      .then(d => {
+        setBanners(d.banners || [])
+        if (d.banner_width)  setBannerWidth(d.banner_width)
+        if (d.banner_height) setBannerHeight(d.banner_height)
+      })
       .catch(() => setBanners([]))
   }, [])
 
   // Mientras carga → hero estático (evita layout shift)
   if (banners === null || banners.length === 0) return <DefaultHero />
-  return <Carousel banners={banners} />
+  return <Carousel banners={banners} width={bannerWidth} height={bannerHeight} />
 }
+

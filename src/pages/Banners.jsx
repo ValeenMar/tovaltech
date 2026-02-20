@@ -8,10 +8,12 @@ const RECOMMENDED = '1440 × 500 px (ratio 16:5)'
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 function useBanners() {
-  const [banners,    setBanners]    = useState([])
-  const [youtubeUrl, setYoutubeUrl] = useState('')
-  const [loading,    setLoading]    = useState(true)
-  const [error,      setError]      = useState(null)
+  const [banners,      setBanners]      = useState([])
+  const [youtubeUrl,   setYoutubeUrl]   = useState('')
+  const [bannerWidth,  setBannerWidth]  = useState(1440)
+  const [bannerHeight, setBannerHeight] = useState(500)
+  const [loading,      setLoading]      = useState(true)
+  const [error,        setError]        = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -21,6 +23,8 @@ function useBanners() {
       if (!res.ok) throw new Error(data.message || 'Error')
       setBanners(data.banners || [])
       setYoutubeUrl(data.youtube_url || '')
+      if (data.banner_width)  setBannerWidth(data.banner_width)
+      if (data.banner_height) setBannerHeight(data.banner_height)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -29,7 +33,7 @@ function useBanners() {
   }, [])
 
   useEffect(() => { load() }, [load])
-  return { banners, youtubeUrl, loading, error, reload: load }
+  return { banners, youtubeUrl, bannerWidth, bannerHeight, loading, error, reload: load }
 }
 
 // ── Extrae ID de YouTube de cualquier formato de URL ──────────────────────────
@@ -317,9 +321,138 @@ function YoutubePanel({ initialUrl, onSaved }) {
   )
 }
 
+// ── Panel Dimensiones del hero ────────────────────────────────────────────────
+function DimensionsPanel({ initialWidth, initialHeight, onSaved }) {
+  const [width,  setWidth]  = useState(initialWidth  || 1440)
+  const [height, setHeight] = useState(initialHeight || 500)
+  const [saving, setSaving] = useState(false)
+  const [saved,  setSaved]  = useState(false)
+  const [error,  setError]  = useState(null)
+
+  useEffect(() => {
+    setWidth(initialWidth   || 1440)
+    setHeight(initialHeight || 500)
+  }, [initialWidth, initialHeight])
+
+  const PRESETS = [
+    { label: '1440 × 500 (default)',   w: 1440, h: 500  },
+    { label: '1440 × 400 (compacto)',  w: 1440, h: 400  },
+    { label: '1440 × 600 (grande)',    w: 1440, h: 600  },
+    { label: '1440 × 720 (16:9)',      w: 1440, h: 720  },
+    { label: '1440 × 810 (ancho)',     w: 1440, h: 810  },
+  ]
+
+  const handleSave = async () => {
+    const w = parseInt(width,  10)
+    const h = parseInt(height, 10)
+    if (!w || !h || w < 100 || h < 50) { setError('Ingresá dimensiones válidas (mín. 100×50)'); return }
+    setSaving(true); setError(null)
+    try {
+      const res  = await fetch('/api/banners', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'set_dimensions', banner_width: w, banner_height: h }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error')
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+      onSaved()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const ratio = width && height ? `${(width / height).toFixed(2)} : 1` : '—'
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden mt-5">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h3 className="font-semibold text-gray-800">📐 Dimensiones del carrusel</h3>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Ajustá el aspect-ratio del hero para que coincida con el tamaño de tus imágenes.
+          Se aplica en la tienda automáticamente.
+        </p>
+      </div>
+      <div className="px-6 py-5 space-y-4">
+        {/* Presets */}
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-2">Presets rápidos</p>
+          <div className="flex flex-wrap gap-2">
+            {PRESETS.map(p => (
+              <button
+                key={p.label}
+                onClick={() => { setWidth(p.w); setHeight(p.h); setSaved(false) }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border
+                  ${width === p.w && height === p.h
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'}`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Inputs manuales */}
+        <div className="flex items-end gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Ancho (px)</label>
+            <input
+              type="number" min="100" max="3840" value={width}
+              onChange={e => { setWidth(e.target.value); setSaved(false) }}
+              className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm
+                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <span className="text-gray-400 pb-2">×</span>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Alto (px)</label>
+            <input
+              type="number" min="50" max="1080" value={height}
+              onChange={e => { setHeight(e.target.value); setSaved(false) }}
+              className="w-28 px-3 py-2 border border-gray-200 rounded-lg text-sm
+                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="pb-2 text-xs text-gray-400">
+            ratio {ratio}
+          </div>
+          <button
+            onClick={handleSave} disabled={saving}
+            className={`pb-0 px-5 py-2 rounded-xl text-sm font-semibold transition-colors
+              ${saved
+                ? 'bg-green-500 text-white'
+                : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50'}`}
+          >
+            {saving ? 'Guardando...' : saved ? '✅ Guardado' : 'Aplicar'}
+          </button>
+        </div>
+
+        {/* Preview visual del ratio */}
+        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+          <p className="text-xs text-gray-400 mb-2">Vista previa del ratio</p>
+          <div
+            className="bg-gradient-to-r from-blue-100 to-indigo-100 rounded-lg border border-blue-200 max-w-xs"
+            style={{ aspectRatio: `${width} / ${height}` }}
+          >
+            <div className="w-full h-full flex items-center justify-center text-blue-400 text-xs font-medium">
+              {width} × {height}
+            </div>
+          </div>
+        </div>
+
+        {error && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+      </div>
+    </div>
+  )
+}
+
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function Banners() {
-  const { banners, youtubeUrl, loading, error, reload } = useBanners()
+  const { banners, youtubeUrl, bannerWidth, bannerHeight, loading, error, reload } = useBanners()
   const [modal, setModal] = useState(null) // null | 'create' | banner object para edit
 
   const activeBanners  = banners.filter(b => b.active)
@@ -403,6 +536,13 @@ export default function Banners() {
 
           {/* ── Panel YouTube ──────────────────────────────────────────── */}
           <YoutubePanel initialUrl={youtubeUrl} onSaved={reload} />
+
+          {/* ── Panel Dimensiones del hero ──────────────────────────────── */}
+          <DimensionsPanel
+            initialWidth={bannerWidth}
+            initialHeight={bannerHeight}
+            onSaved={reload}
+          />
         </>
       )}
 

@@ -19,11 +19,70 @@ function extractYoutubeId(url) {
   return m ? m[1] : null
 }
 
+// ── Sección YouTube: thumbnail con click-to-play ──────────────────────────────
+// Solución al problema del iframe bloqueado:
+//   1. Se muestra la thumbnail de YouTube (sin ningún iframe)
+//   2. El usuario hace click → se monta el iframe con autoplay=1
+// Así se respeta la política del navegador: autoplay solo ocurre por gesto humano.
+function YoutubeSection({ videoId }) {
+  const [playing, setPlaying] = useState(false)
+  const thumb = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+
+  if (!playing) {
+    return (
+      <section
+        className="w-full bg-black relative cursor-pointer group"
+        style={{ aspectRatio: '16 / 9' }}
+        onClick={() => setPlaying(true)}
+        role="button"
+        aria-label="Reproducir video"
+      >
+        {/* Thumbnail de YouTube */}
+        <img
+          src={thumb}
+          alt="Video TovalTech"
+          className="w-full h-full object-cover"
+        />
+        {/* Overlay oscuro al hover */}
+        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
+        {/* Botón play estilo YouTube */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center shadow-2xl
+                          group-hover:scale-110 transition-transform duration-200">
+            <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </div>
+        </div>
+        {/* Hint de texto */}
+        <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm
+                      bg-black/40 px-4 py-1 rounded-full backdrop-blur-sm">
+          Hacé click para reproducir
+        </p>
+      </section>
+    )
+  }
+
+  // Después del click → iframe en youtube-nocookie.com con autoplay
+  return (
+    <section className="w-full bg-black" style={{ aspectRatio: '16 / 9' }}>
+      <iframe
+        src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=0&rel=0&modestbranding=1`}
+        className="w-full h-full"
+        style={{ display: 'block' }}
+        allow="autoplay; encrypted-media; picture-in-picture"
+        allowFullScreen
+        title="TovalTech Video"
+      />
+    </section>
+  )
+}
+
 export default function Home() {
   const { products, loading } = useProducts({ limit: 8 })
   const [youtubeId, setYoutubeId] = useState(null)
 
-  // Cargar YouTube URL desde la API
+  // Cargar YouTube URL desde la API de banners (misma llamada que el hero)
   useEffect(() => {
     fetch('/api/banners')
       .then(r => r.ok ? r.json() : null)
@@ -59,19 +118,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── Video YouTube (pantalla completa) ────────────────────────── */}
-      {youtubeId && (
-        <section className="w-full bg-black" style={{ aspectRatio: '16 / 9' }}>
-          <iframe
-            src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1&loop=1&playlist=${youtubeId}&controls=0&modestbranding=1&rel=0&playsinline=1`}
-            className="w-full h-full"
-            style={{ display: 'block' }}
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowFullScreen
-            title="TovalTech Video"
-          />
-        </section>
-      )}
+      {/* ── Video YouTube (click-to-play) ─────────────────────────────── */}
+      {youtubeId && <YoutubeSection videoId={youtubeId} />}
 
       {/* ── Productos Destacados ─────────────────────────────────────── */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -121,3 +169,4 @@ export default function Home() {
     </div>
   )
 }
+

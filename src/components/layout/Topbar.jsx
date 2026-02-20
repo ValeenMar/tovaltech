@@ -1,18 +1,22 @@
+import { useLocation } from 'react-router-dom'
 import { useApp } from '../../context/AppContext'
 
 const pageTitles = {
-  dashboard:  'Dashboard',
-  orders:     'Pedidos',
-  products:   'Productos',
-  categories: 'Categorías',
-  customers:  'Clientes',
-  invoices:   'Facturas',
-  analytics:  'Analíticas',
-  settings:   'Configuración',
+  '/admin':            'Dashboard',
+  '/admin/orders':     'Pedidos',
+  '/admin/products':   'Productos',
+  '/admin/categories': 'Categorías',
+  '/admin/banners':    'Inicio',
+  '/admin/customers':  'Clientes',
+  '/admin/invoices':   'Facturas',
+  '/admin/analytics':  'Analíticas',
+  '/admin/settings':   'Configuración',
 }
 
 export default function Topbar() {
-  const { currentPage, sidebarOpen, setSidebarOpen } = useApp()
+  const location  = useLocation()
+  const { sidebarOpen, setSidebarOpen } = useApp()
+  const title     = pageTitles[location.pathname] ?? 'Admin'
 
   return (
     <header className="bg-white px-6 py-3 flex items-center justify-between border-b border-gray-200 shrink-0">
@@ -21,7 +25,7 @@ export default function Topbar() {
           ☰
         </button>
         <span className="text-sm text-gray-400">
-          Inicio / <span className="text-gray-900 font-semibold">{pageTitles[currentPage]}</span>
+          Inicio / <span className="text-gray-900 font-semibold">{title}</span>
         </span>
       </div>
       <div className="flex items-center gap-4">

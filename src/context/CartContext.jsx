@@ -1,9 +1,27 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 
 const CartContext = createContext();
 
+const STORAGE_KEY = 'tovaltech_cart';
+
+function loadCart() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function CartProvider({ children }) {
-  const [cartItems, setCartItems] = useState([]);
+  const [cartItems, setCartItems] = useState(() => loadCart());
+
+  // Sincronizar con localStorage cada vez que cambie el carrito
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cartItems));
+    } catch { /* quota exceeded u otros errores → ignorar silenciosamente */ }
+  }, [cartItems]);
 
   const addToCart = (product) => {
     setCartItems(prev => {

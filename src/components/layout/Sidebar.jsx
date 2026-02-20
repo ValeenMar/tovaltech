@@ -1,20 +1,36 @@
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useApp } from '../../context/AppContext'
 
 const navItems = [
-  { key: 'dashboard',  icon: '📊', label: 'Dashboard',      section: 'Principal' },
-  { key: 'orders',     icon: '📦', label: 'Pedidos',        badge: 12, section: 'Principal' },
-  { key: 'products',   icon: '🏷️', label: 'Productos',      section: 'Principal' },
-  { key: 'categories', icon: '🗂️', label: 'Categorías',     section: 'Principal' },
-  { key: 'banners',    icon: '🖼️', label: 'Inicio',         section: 'Principal' },
-  { key: 'customers',  icon: '👥', label: 'Clientes',       section: 'Principal' },
-  { key: 'invoices',   icon: '🧾', label: 'Facturas',       section: 'Sistema' },
-  { key: 'analytics',  icon: '📈', label: 'Analíticas',     section: 'Sistema' },
-  { key: 'settings',   icon: '⚙️', label: 'Configuración',  section: 'Sistema' },
+  { key: 'dashboard',  path: '/admin',            icon: '📊', label: 'Dashboard',      section: 'Principal' },
+  { key: 'orders',     path: '/admin/orders',      icon: '📦', label: 'Pedidos',        badge: 12, section: 'Principal' },
+  { key: 'products',   path: '/admin/products',    icon: '🏷️', label: 'Productos',      section: 'Principal' },
+  { key: 'categories', path: '/admin/categories',  icon: '🗂️', label: 'Categorías',     section: 'Principal' },
+  { key: 'banners',    path: '/admin/banners',      icon: '🖼️', label: 'Inicio',         section: 'Principal' },
+  { key: 'customers',  path: '/admin/customers',   icon: '👥', label: 'Clientes',       section: 'Principal' },
+  { key: 'invoices',   path: '/admin/invoices',    icon: '🧾', label: 'Facturas',       section: 'Sistema' },
+  { key: 'analytics',  path: '/admin/analytics',   icon: '📈', label: 'Analíticas',     section: 'Sistema' },
+  { key: 'settings',   path: '/admin/settings',    icon: '⚙️', label: 'Configuración',  section: 'Sistema' },
 ]
 
 export default function Sidebar() {
-  const { currentPage, setCurrentPage, sidebarOpen, setSidebarOpen } = useApp()
-  const sections = [...new Set(navItems.map(i => i.section))]
+  const navigate  = useNavigate()
+  const location  = useLocation()
+  const { sidebarOpen, setSidebarOpen } = useApp()
+  const sections  = [...new Set(navItems.map(i => i.section))]
+
+  // Determina si un item está activo:
+  // - /admin (index) → activo solo si pathname === '/admin' exacto
+  // - resto → activo si pathname empieza con el path del item
+  const isActive = (item) => {
+    if (item.path === '/admin') return location.pathname === '/admin'
+    return location.pathname.startsWith(item.path)
+  }
+
+  const handleNav = (item) => {
+    navigate(item.path)
+    if (window.innerWidth < 1024) setSidebarOpen(false)
+  }
 
   return (
     <>
@@ -46,8 +62,8 @@ export default function Sidebar() {
               {navItems.filter(i => i.section === section).map(item => (
                 <div
                   key={item.key}
-                  onClick={() => { setCurrentPage(item.key); if (window.innerWidth < 1024) setSidebarOpen(false) }}
-                  className={`sidebar-item ${currentPage === item.key ? 'active' : ''} ${!sidebarOpen ? 'lg:justify-center lg:px-0' : ''}`}
+                  onClick={() => handleNav(item)}
+                  className={`sidebar-item ${isActive(item) ? 'active' : ''} ${!sidebarOpen ? 'lg:justify-center lg:px-0' : ''}`}
                 >
                   <span className="text-lg min-w-[24px] text-center">{item.icon}</span>
                   {sidebarOpen && <span>{item.label}</span>}
