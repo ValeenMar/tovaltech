@@ -15,9 +15,6 @@ const connectDB = require('../db');
 
 const headers = { 'content-type': 'application/json' };
 
-// Tabla correcta en tu SQL (según tu propia verificación y el contexto)
-const CATS_TABLE = 'dbo.categories';
-
 // ── GET ───────────────────────────────────────────────────────────────────────
 
 async function getCategories(pool) {
@@ -29,7 +26,7 @@ async function getCategories(pool) {
       c.created_at,
       c.updated_at,
       COUNT(p.id) AS product_count
-    FROM ${CATS_TABLE} c
+    FROM dbo.tovaltech_categories c
     LEFT JOIN dbo.tovaltech_products p ON p.category = c.name
     GROUP BY c.id, c.name, c.markup_pct, c.created_at, c.updated_at
     ORDER BY c.name ASC;
@@ -64,7 +61,7 @@ async function createCategory(pool, { name, markup_pct }) {
   // Verificar unicidad
   const exists = await pool.request()
     .input('name', cleanName)
-    .query(`SELECT id FROM ${CATS_TABLE} WHERE name = @name`);
+    .query(`SELECT id FROM dbo.tovaltech_categories WHERE name = @name`);
 
   if (exists.recordset.length) {
     return { status: 409, body: { error: `La categoría "${cleanName}" ya existe.` } };
@@ -74,7 +71,7 @@ async function createCategory(pool, { name, markup_pct }) {
     .input('name',       cleanName)
     .input('markup_pct', cleanMarkup)
     .query(`
-      INSERT INTO ${CATS_TABLE} (name, markup_pct)
+      INSERT INTO dbo.tovaltech_categories (name, markup_pct)
       OUTPUT INSERTED.id, INSERTED.name, INSERTED.markup_pct, INSERTED.created_at
       VALUES (@name, @markup_pct);
     `);
@@ -105,7 +102,7 @@ async function updateCategory(pool, { id, name, markup_pct }) {
   // Verificar que existe
   const existing = await pool.request()
     .input('id', numId)
-    .query(`SELECT id, name FROM ${CATS_TABLE} WHERE id = @id`);
+    .query(`SELECT id, name FROM dbo.tovaltech_categories WHERE id = @id`);
 
   if (!existing.recordset.length) {
     return { status: 404, body: { error: 'Categoría no encontrada.' } };
@@ -132,7 +129,7 @@ async function updateCategory(pool, { id, name, markup_pct }) {
     const nameExists = await pool.request()
       .input('name', newName)
       .input('id',   numId)
-      .query(`SELECT id FROM ${CATS_TABLE} WHERE name = @name AND id <> @id`);
+      .query(`SELECT id FROM dbo.tovaltech_categories WHERE name = @name AND id <> @id`);
 
     if (nameExists.recordset.length) {
       return { status: 409, body: { error: `La categoría "${newName}" ya existe.` } };
@@ -150,7 +147,7 @@ async function updateCategory(pool, { id, name, markup_pct }) {
     .input('name',       newName)
     .input('markup_pct', newMarkup)
     .query(`
-      UPDATE ${CATS_TABLE}
+      UPDATE dbo.tovaltech_categories
       SET name = @name, markup_pct = @markup_pct, updated_at = GETDATE()
       WHERE id = @id
     `);
@@ -167,7 +164,7 @@ async function deleteCategory(pool, { id, reassign_to }) {
 
   const existing = await pool.request()
     .input('id', numId)
-    .query(`SELECT id, name FROM ${CATS_TABLE} WHERE id = @id`);
+    .query(`SELECT id, name FROM dbo.tovaltech_categories WHERE id = @id`);
 
   if (!existing.recordset.length) {
     return { status: 404, body: { error: 'Categoría no encontrada.' } };
@@ -180,7 +177,7 @@ async function deleteCategory(pool, { id, reassign_to }) {
     // Verificar que la categoría destino exista
     const dest = await pool.request()
       .input('name', reassign_to)
-      .query(`SELECT id FROM ${CATS_TABLE} WHERE name = @name`);
+      .query(`SELECT id FROM dbo.tovaltech_categories WHERE name = @name`);
 
     if (!dest.recordset.length) {
       return { status: 404, body: { error: `La categoría destino "${reassign_to}" no existe.` } };
@@ -190,11 +187,14 @@ async function deleteCategory(pool, { id, reassign_to }) {
       .input('newCat', reassign_to)
       .input('oldCat', catName)
       .query(`UPDATE dbo.tovaltech_products SET category = @newCat WHERE category = @oldCat`);
+  } else {
+    // Dejar los productos con la categoría como texto libre (no NULL)
+    // — el texto sigue siendo válido aunque no haya categoría en la tabla
   }
 
   await pool.request()
     .input('id', numId)
-    .query(`DELETE FROM ${CATS_TABLE} WHERE id = @id`);
+    .query(`DELETE FROM dbo.tovaltech_categories WHERE id = @id`);
 
   return {
     status: 200,
@@ -212,23 +212,26 @@ async function assignProducts(pool, { product_ids, category_name }) {
     return { status: 400, body: { error: 'category_name requerido.' } };
   }
 
+  // Si category_name es '' → desasignar (NULL o string vacío)
   const cleanCat = String(category_name).trim();
 
   // Verificar que la categoría existe (salvo que sea vacío = desasignar)
   if (cleanCat) {
     const exists = await pool.request()
       .input('name', cleanCat)
-      .query(`SELECT id FROM ${CATS_TABLE} WHERE name = @name`);
+      .query(`SELECT id FROM dbo.tovaltech_categories WHERE name = @name`);
     if (!exists.recordset.length) {
       return { status: 404, body: { error: `Categoría "${cleanCat}" no encontrada.` } };
     }
   }
 
+  // Actualizar en lote. SQL no tiene array param, lo hacemos con tabla en memoria.
   const validIds = product_ids.map(id => parseInt(id, 10)).filter(n => Number.isFinite(n));
   if (!validIds.length) {
     return { status: 400, body: { error: 'Ningún ID de producto válido.' } };
   }
 
+  // Usamos una tabla de valores inline (máx ~1000 IDs; si hubiera más se haría en lotes)
   const idList = validIds.join(',');
 
   await pool.request()
@@ -299,7 +302,9 @@ module.exports = async function (context, req) {
   try {
     const pool = await connectDB();
 
+    // ── GET ──────────────────────────────────────────────────────────────
     if (req.method === 'GET') {
+      // ?mode=products → devuelve productos para el selector de asignación
       if (req.query.mode === 'products') {
         const r = await getProductsForAssign(pool, {
           search:   req.query.search,
@@ -316,6 +321,7 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // ── POST ─────────────────────────────────────────────────────────────
     if (req.method === 'POST') {
       const body   = req.body ?? {};
       const action = body.action;

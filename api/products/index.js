@@ -11,7 +11,7 @@ function toInt(v, fallback) {
 }
 function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
-const CATEGORY_TABLE = 'dbo.categories';
+const CATEGORY_TABLE = 'dbo.tovaltech_categories';
 
 module.exports = async function (context, req) {
   try {
