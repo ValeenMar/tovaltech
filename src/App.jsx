@@ -5,6 +5,7 @@ import StoreLayout from './layouts/StoreLayout';
 import AdminLayout from './layouts/AdminLayout';
 import Home from './pages/store/Home';
 import StoreCatalog from './pages/store/StoreCatalog';
+import ProductDetail from './pages/store/ProductDetail';
 import Cart from './pages/store/Cart';
 import Checkout from './pages/store/Checkout';
 import CheckoutResultado from './pages/store/CheckoutResultado';
@@ -17,12 +18,13 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route element={<StoreLayout />}>
-              <Route path="/" element={<Home />} />
-              <Route path="/productos" element={<StoreCatalog />} />
-              <Route path="/carrito" element={<Cart />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/checkout/resultado" element={<CheckoutResultado />} />
-              <Route path="/contacto" element={<Contact />} />
+              <Route path="/"                        element={<Home />} />
+              <Route path="/productos"               element={<StoreCatalog />} />
+              <Route path="/productos/:id"           element={<ProductDetail />} />
+              <Route path="/carrito"                 element={<Cart />} />
+              <Route path="/checkout"                element={<Checkout />} />
+              <Route path="/checkout/resultado"      element={<CheckoutResultado />} />
+              <Route path="/contacto"                element={<Contact />} />
             </Route>
             <Route path="/admin" element={<AdminLayout />} />
           </Routes>

@@ -1,4 +1,8 @@
+// src/components/store/ProductCard.jsx
+// Tarjeta de producto — ahora con link a la página de detalle
+
 import { memo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 
 const fmtARS = (n) =>
@@ -9,10 +13,12 @@ const fmtUSD = (n) =>
 
 function ProductCard({ product, priority = false }) {
   const { addToCart } = useCart();
-  const [imgError, setImgError] = useState(false);
+  const [imgError,  setImgError]  = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [added,     setAdded]     = useState(false);
 
-  const handleAdd = () => {
+  const handleAdd = (e) => {
+    e.preventDefault(); // no navega al detalle al clickear el botón
     addToCart({
       id:        product.id,
       name:      product.name,
@@ -22,20 +28,22 @@ function ProductCard({ product, priority = false }) {
       price:     product.price_ars,
       price_usd: product.price_usd,
     });
+    setAdded(true);
+    setTimeout(() => setAdded(false), 1800);
   };
 
   const showImage = product.image_url && !imgError;
-  const dolarRate = product.dolar_rate;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden group flex flex-col">
-      {/* Imagen / Emoji — height fija evita CLS */}
+    <Link
+      to={`/productos/${product.id}`}
+      className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden group flex flex-col"
+    >
+      {/* Imagen */}
       <div className="bg-white h-52 flex items-center justify-center overflow-hidden relative flex-shrink-0 border-b border-gray-100">
         {showImage ? (
           <>
-            {!imgLoaded && (
-              <div className="absolute inset-0 bg-gray-100 animate-pulse" />
-            )}
+            {!imgLoaded && <div className="absolute inset-0 bg-gray-100 animate-pulse" />}
             <img
               src={product.image_url}
               alt={product.name}
@@ -46,8 +54,8 @@ function ProductCard({ product, priority = false }) {
               height={208}
               onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
-              className={`max-h-full max-w-full w-auto h-auto object-contain transition-opacity duration-300
-                group-hover:scale-105 transition-transform p-3
+              className={`max-h-full max-w-full w-auto h-auto object-contain p-3
+                group-hover:scale-105 transition-transform duration-300
                 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
             />
           </>
@@ -55,7 +63,6 @@ function ProductCard({ product, priority = false }) {
           <span className="text-6xl select-none">{product.emoji ?? '📦'}</span>
         )}
 
-        {/* Badge featured */}
         {product.featured && (
           <span className="absolute top-2 left-2 text-[10px] bg-yellow-400 text-yellow-900 font-bold px-2 py-0.5 rounded-full shadow-sm">
             ⭐ Destacado
@@ -84,7 +91,7 @@ function ProductCard({ product, priority = false }) {
           <p className="text-[11px] text-gray-400 mb-2">🛡️ Garantía: {product.warranty}</p>
         )}
 
-        {/* Precios */}
+        {/* Precios + botón */}
         <div className="flex items-end justify-between mt-auto pt-2 border-t border-gray-50">
           <div>
             <div className="flex items-baseline gap-1.5">
@@ -93,18 +100,21 @@ function ProductCard({ product, priority = false }) {
                 IVA inc.
               </span>
             </div>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {fmtUSD(product.price_usd)} · Precio final
-            </p>
+            <p className="text-xs text-gray-400 mt-0.5">{fmtUSD(product.price_usd)} · Precio final</p>
           </div>
+
           <button
             onClick={handleAdd}
             disabled={product.stock === 0}
-            className="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium
-                       hover:bg-blue-700 active:scale-95 transition-all
-                       disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 ml-2"
+            className={`px-3 py-2 rounded-lg text-sm font-medium flex-shrink-0 ml-2
+              active:scale-95 transition-all
+              ${added
+                ? 'bg-green-500 text-white'
+                : product.stock === 0
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'}`}
           >
-            🛒 Agregar
+            {added ? '✅' : '🛒 Agregar'}
           </button>
         </div>
 
@@ -116,9 +126,8 @@ function ProductCard({ product, priority = false }) {
           <p className="text-[11px] text-red-500 mt-1.5">❌ Sin stock</p>
         )}
       </div>
-    </div>
+    </Link>
   );
 }
 
-// React.memo: evita re-render si el producto no cambió
 export default memo(ProductCard);
