@@ -345,6 +345,21 @@ export default function ProductDetail() {
         </div>
       </div>
 
+
+      {/* Descripcion / Ficha tecnica */}
+      {product.description && (
+        <div className="mt-8 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
+            <h2 className="font-bold text-gray-800 text-base">Descripcion del producto</h2>
+          </div>
+          <div className="px-6 py-5">
+            <pre className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-sans">
+              {product.description}
+            </pre>
+          </div>
+        </div>
+      )}
+
       {/* ── Productos similares ────────────────────────────────────────────── */}
       {similar.length > 0 && (
         <SimilarCarousel
