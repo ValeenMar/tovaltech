@@ -1,34 +1,34 @@
 // api/sync-timer/index.js
-// Timer Trigger — corre el sync de mayoristas automáticamente todos los días a las 8am UTC.
+// HTTP Trigger — corre el sync de mayoristas automáticamente.
 //
-// No hace falta tocar nada en el código cuando cambian los precios de Elit o NewBytes:
-// Azure lo corre solo y el resultado queda guardado en tovaltech_settings["last_sync_result"].
+// Azure Static Web Apps no soporta timerTrigger, así que este endpoint
+// se llama desde cron-job.org (gratis) todos los días a las 8am Argentina.
 //
-// Para cambiar el horario, editá el campo "schedule" en function.json.
-// Formato CRON de Azure: "seg min hora día mes día-semana"
-//   "0 0 8 * * *"  → todos los días a las 08:00 UTC (05:00 Argentina en verano, 05:00 UTC-3)
-//   "0 0 11 * * *" → todos los días a las 08:00 Argentina (UTC-3)
+// Setup en cron-job.org:
+//   URL:    https://www.tovaltech.com.ar/api/sync-timer?secret=TU_CRON_SECRET
+//   Método: GET
+//   Hora:   11:00 UTC (= 08:00 Argentina UTC-3)
+//   Días:   todos
 //
-// Variable de entorno extra que necesita Azure (además de las de la DB):
-//   ELIT_API_URL    → URL de descarga del CSV de Elit
-//   NEWBYTES_API_URL → URL de descarga del CSV de NewBytes
+// Agregá CRON_SECRET en Azure → Configuration → Application settings.
 
 const syncHandler = require('../sync/index.js');
 
-module.exports = async function (context, myTimer) {
-  if (myTimer.isPastDue) {
-    context.log.warn('sync_timer_past_due — el timer se disparó tarde, corriendo igual.');
+module.exports = async function (context, req) {
+  // Verificar secret para que solo cron-job.org pueda dispararlo
+  const secret = process.env.CRON_SECRET;
+  if (secret) {
+    const provided = req.query?.secret || req.headers?.['x-cron-secret'];
+    if (provided !== secret) {
+      context.res = { status: 401, body: { error: 'unauthorized' } };
+      return;
+    }
   }
 
-  context.log.info('sync_timer_start', { scheduledTime: myTimer.scheduleStatus?.last });
+  context.log.info('sync_timer_start — disparado por cron externo');
 
-  // Reutilizamos exactamente el mismo handler del sync manual.
-  // Le pasamos un req vacío porque el timer no tiene HTTP request.
   const fakeReq = { body: {}, query: {}, method: 'POST', headers: {} };
-
   await syncHandler(context, fakeReq);
 
-  // El resultado ya lo guarda el handler en tovaltech_settings["last_sync_result"]
-  // y también lo loguea. context.res quedará seteado pero Azure lo ignora en timers.
   context.log.info('sync_timer_complete');
 };

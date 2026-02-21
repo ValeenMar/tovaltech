@@ -34,6 +34,10 @@
       "allowedRoles": ["admin"]
     },
     {
+      "route": "/api/sync-timer*",
+      "allowedRoles": ["anonymous"]
+    },
+    {
       "route": "/api/sync*",
       "allowedRoles": ["admin"]
     },
