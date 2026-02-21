@@ -162,32 +162,19 @@ function mapNewBytes(row, dolar) {
 async function mergeProducts(pool, products) {
   if (!products.length) return { inserted: 0, updated: 0, total: 0 };
 
-  await pool.request().batch(`
-    IF OBJECT_ID('tempdb..#staging_products') IS NOT NULL DROP TABLE #staging_products;
-    CREATE TABLE #staging_products (
-      sku        NVARCHAR(100)  NOT NULL,
-      name       NVARCHAR(300)  NOT NULL,
-      category   NVARCHAR(100)  NULL,
-      brand      NVARCHAR(100)  NULL,
-      price_usd  DECIMAL(10,2)  NOT NULL,
-      price_ars  INT            NOT NULL,
-      stock      INT            NOT NULL,
-      image_url  NVARCHAR(500)  NULL,
-      provider   NVARCHAR(20)   NULL,
-      warranty   NVARCHAR(50)   NULL,
-      dolar_rate DECIMAL(10,2)  NULL
-    );
-  `);
+  // Limpiar la tabla permanente antes de cargar
+  await pool.request().query(`TRUNCATE TABLE dbo.tovaltech_staging`);
 
-  const table = new sql.Table('#staging_products');
-  table.create = true;
-  table.columns.add('sku',        sql.NVarChar(100),   { nullable: true });
-  table.columns.add('name',       sql.NVarChar(300),   { nullable: true });
+  // Bulk insert a la tabla permanente (misma conexión no requerida)
+  const table = new sql.Table('dbo.tovaltech_staging');
+  table.create = false;
+  table.columns.add('sku',        sql.NVarChar(100),   { nullable: false });
+  table.columns.add('name',       sql.NVarChar(300),   { nullable: false });
   table.columns.add('category',   sql.NVarChar(100),   { nullable: true });
   table.columns.add('brand',      sql.NVarChar(100),   { nullable: true });
-  table.columns.add('price_usd',  sql.Decimal(10, 2),  { nullable: true });
-  table.columns.add('price_ars',  sql.Int,             { nullable: true });
-  table.columns.add('stock',      sql.Int,             { nullable: true });
+  table.columns.add('price_usd',  sql.Decimal(10, 2),  { nullable: false });
+  table.columns.add('price_ars',  sql.Int,             { nullable: false });
+  table.columns.add('stock',      sql.Int,             { nullable: false });
   table.columns.add('image_url',  sql.NVarChar(500),   { nullable: true });
   table.columns.add('provider',   sql.NVarChar(20),    { nullable: true });
   table.columns.add('warranty',   sql.NVarChar(50),    { nullable: true });
@@ -207,7 +194,7 @@ async function mergeProducts(pool, products) {
     DECLARE @merge_output TABLE(action NVARCHAR(10));
 
     MERGE tovaltech_products AS t
-    USING #staging_products AS s ON t.sku = s.sku
+    USING dbo.tovaltech_staging AS s ON t.sku = s.sku
     WHEN MATCHED THEN
       UPDATE SET
         t.name       = s.name,
