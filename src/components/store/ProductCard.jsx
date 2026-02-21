@@ -95,9 +95,7 @@ function ProductCard({ product, priority = false }) {
         <div className="flex items-end justify-between mt-auto pt-2 border-t border-gray-50">
           <div>
             <p className="text-lg font-bold text-gray-900 leading-tight">{fmtARS(product.price_ars)}</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">
-              Neto: {fmtARS(product.price_ars)}
-            </p>
+            <p className="text-[11px] text-gray-400 mt-0.5">Precio sin imp. nacionales: {fmtARS(Math.round(product.price_ars / 1.21))}</p>
           </div>
 
           <button
