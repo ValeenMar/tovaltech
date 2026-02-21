@@ -88,31 +88,36 @@ module.exports = async function (context, req) {
     if (buscar)    where.push('(name LIKE @buscar OR brand LIKE @buscar OR sku LIKE @buscar OR category LIKE @buscar)');
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-    // ── Count + Items en UN SOLO viaje a SQL ────────────────────────────────
-    // COUNT(*) OVER() devuelve el total en cada fila sin una query separada.
-    // Esto elimina 1 round-trip por request (de 4 viajes a 2, con el cache arriba = 1).
-    const itemsReq = pool.request();
-    if (categoria) itemsReq.input('categoria', categoria);
-    hijos.forEach((h, i) => itemsReq.input(`hijo${i}`, h));
-    if (subcateg)  itemsReq.input('subcategoria', subcateg);
-    if (marca)     itemsReq.input('marca',        marca);
-    if (proveedor) itemsReq.input('proveedor',    proveedor);
-    if (buscar)    itemsReq.input('buscar',       `%${buscar}%`);
+    // ── Count + Items en paralelo (Promise.all = mismo tiempo, sin riesgo) ──
+    const makeReq = () => {
+      const r = pool.request();
+      if (categoria) r.input('categoria', categoria);
+      hijos.forEach((h, i) => r.input(`hijo${i}`, h));
+      if (subcateg)  r.input('subcategoria', subcateg);
+      if (marca)     r.input('marca',        marca);
+      if (proveedor) r.input('proveedor',    proveedor);
+      if (buscar)    r.input('buscar',       `%${buscar}%`);
+      return r;
+    };
+
+    const countReq = makeReq();
+    const itemsReq = makeReq();
     itemsReq.input('offset', offset);
     itemsReq.input('limit',  limit);
 
-    const items = await itemsReq.query(`
-      SELECT *,
-        COUNT(*) OVER() AS _total_count
-      FROM dbo.tovaltech_products ${whereSql}
-      ORDER BY featured DESC, updated_at DESC, id DESC
-      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
-    `);
+    const [countRes, items] = await Promise.all([
+      countReq.query(`SELECT COUNT(1) AS total FROM dbo.tovaltech_products ${whereSql}`),
+      itemsReq.query(`
+        SELECT * FROM dbo.tovaltech_products ${whereSql}
+        ORDER BY featured DESC, updated_at DESC, id DESC
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      `),
+    ]);
 
-    const total = items.recordset?.[0]?._total_count ?? 0;
+    const total = countRes.recordset?.[0]?.total ?? 0;
 
     // ── Aplicar markup — producto > categoría > global ─────────────────────
-    const products = (items.recordset || []).map(({ _total_count, ...p }) => {
+    const products = (items.recordset || []).map(p => {
       const catKey = String(p.category ?? '').trim();
       let effectiveMarkup, markupSource;
 
