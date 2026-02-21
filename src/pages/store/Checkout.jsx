@@ -6,8 +6,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useUser } from '../../context/UserContext';
 import { getCartShipping, ZONES, FREE_SHIPPING_THRESHOLD } from '../../utils/shipping';
+import { WA_NUMBER, TRANSFER_DISCOUNT_PCT } from '../../config/constants';
 
-const WA_NUMBER = '5491123413674';
 
 const fmtARS = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
@@ -334,6 +334,13 @@ export default function Checkout() {
                   </>
                 )}
               </button>
+
+
+              {/* Banner 5% descuento por transferencia */}
+              <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800">
+                <p className="font-semibold">🏦 5% OFF pagando por transferencia</p>
+                <p className="text-xs text-green-600 mt-0.5">Consultanos por WhatsApp y te enviamos el CBU. El descuento se aplica al total de tu pedido.</p>
+              </div>
 
               <button onClick={handleWhatsApp} disabled={!isFormValid}
                 className="w-full flex items-center justify-center gap-2 bg-[#25d366] text-white py-3 rounded-xl
