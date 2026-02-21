@@ -140,6 +140,14 @@ export default function ProductDetail() {
   const [added,    setAdded]    = useState(false);
   const [similar,  setSimilar]  = useState([]);
 
+  // SEO — siempre antes de cualquier return condicional (regla de hooks)
+  useSEO({
+    title:       product?.name,
+    description: product
+      ? `${product.name}${product.brand ? ' - ' + product.brand : ''}. ${product.category ? 'Categoría: ' + product.category + '.' : ''} Comprá online con envío a todo el país.`
+      : undefined,
+  });
+
   useEffect(() => {
     if (!id) return;
     setLoading(true);
@@ -211,12 +219,6 @@ export default function ProductDetail() {
 
   const showImage = product.image_url && !imgError;
   const inStock   = product.stock > 0;
-
-  // SEO dinámico por producto
-  useSEO({
-    title:       product ? product.name : undefined,
-    description: product ? `${product.name}${product.brand ? " - " + product.brand : ""}. ${product.category ? "Categoría: " + product.category + "." : ""} Comprá online con envío a todo el país.` : undefined,
-  });
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
@@ -290,9 +292,6 @@ export default function ProductDetail() {
           {/* Precios */}
           <div className="bg-gray-50 rounded-2xl px-5 py-4 mb-5">
             <p className="text-3xl font-bold text-gray-900 mb-1">{fmtARS(product.price_ars)}</p>
-            <p className="text-xs text-gray-400">
-              Precio sin impuestos nacionales: {fmtARS(Math.round(product.price_ars / 1.21))}
-            </p>
             {product.dolar_rate && (
               <p className="text-xs text-gray-400 mt-1">
                 Tipo de cambio: 1 USD = ${product.dolar_rate.toLocaleString('es-AR')} ARS (dólar oficial)
