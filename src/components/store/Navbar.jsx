@@ -1,7 +1,7 @@
 // src/components/store/Navbar.jsx
 import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
-import { useUser } from '../../context/UserContext';
+import { useAuth } from '../../context/AuthContext';
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 const CartIcon = ({ className }) => (
@@ -22,7 +22,6 @@ const UserIcon = ({ className }) => (
 // ── Logo TovalTech ─────────────────────────────────────────────────────────────
 const TovalTechLogo = () => (
   <div className="flex items-center gap-2.5">
-    {/* Chip / circuit icon */}
     <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
       <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="9" y="9" width="6" height="6" rx="1"/>
@@ -37,15 +36,17 @@ const TovalTechLogo = () => (
 );
 
 export default function Navbar() {
-  const { cartCount }          = useCart();
-  const { hasSavedData, user } = useUser();
-  const { pathname }           = useLocation();
+  const { cartCount }        = useCart();
+  const { isLogged, authUser, logout } = useAuth();
+  const { pathname }         = useLocation();
 
   const links = [
     { to: '/',          label: 'Inicio' },
     { to: '/productos', label: 'Productos' },
     { to: '/contacto',  label: 'Contacto' },
   ];
+
+  const firstName = authUser?.name?.split(' ')[0] || 'Mi cuenta';
 
   return (
     <nav className="bg-white shadow-sm sticky top-0 z-50 border-b border-gray-100">
@@ -70,15 +71,29 @@ export default function Navbar() {
 
           <div className="flex items-center gap-1">
 
-            {/* Perfil */}
-            <Link to="/mis-datos"
-              className={`hidden sm:flex items-center gap-1.5 text-xs font-medium transition-colors px-3 py-2 rounded-lg
-                ${hasSavedData
-                  ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
-                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`}>
-              <UserIcon className="w-4 h-4" />
-              {hasSavedData ? user?.name?.split(' ')[0] || 'Mi perfil' : 'Mis datos'}
-            </Link>
+            {/* Perfil / Auth */}
+            {isLogged ? (
+              <div className="hidden sm:flex items-center gap-1">
+                <Link to="/mis-datos"
+                  className="flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors px-3 py-2 rounded-lg">
+                  <UserIcon className="w-4 h-4" />
+                  {firstName}
+                </Link>
+                <button
+                  onClick={logout}
+                  className="text-xs text-gray-400 hover:text-gray-600 px-2 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+                  title="Cerrar sesión"
+                >
+                  Salir
+                </button>
+              </div>
+            ) : (
+              <Link to="/ingresar"
+                className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors px-3 py-2 rounded-lg">
+                <UserIcon className="w-4 h-4" />
+                Ingresar
+              </Link>
+            )}
 
             {/* Carrito */}
             <Link to="/carrito"
@@ -104,10 +119,20 @@ export default function Navbar() {
             {l.label}
           </Link>
         ))}
-        <Link to="/mis-datos" className="text-sm text-gray-400 ml-auto flex items-center gap-1">
-          <UserIcon className="w-3.5 h-3.5" />
-          {hasSavedData ? user?.name?.split(' ')[0] || 'Perfil' : 'Mis datos'}
-        </Link>
+        {isLogged ? (
+          <>
+            <Link to="/mis-datos" className="text-sm text-blue-600 ml-auto flex items-center gap-1">
+              <UserIcon className="w-3.5 h-3.5" />
+              {firstName}
+            </Link>
+            <button onClick={logout} className="text-sm text-gray-400">Salir</button>
+          </>
+        ) : (
+          <Link to="/ingresar" className="text-sm text-gray-400 ml-auto flex items-center gap-1">
+            <UserIcon className="w-3.5 h-3.5" />
+            Ingresar
+          </Link>
+        )}
       </div>
     </nav>
   );
