@@ -180,7 +180,7 @@ async function mergeProducts(pool, products) {
   `);
 
   const table = new sql.Table('#staging_products');
-  table.create = false;
+  table.create = true;
   table.columns.add('sku',        sql.NVarChar(100),   { nullable: true });
   table.columns.add('name',       sql.NVarChar(300),   { nullable: true });
   table.columns.add('category',   sql.NVarChar(100),   { nullable: true });
