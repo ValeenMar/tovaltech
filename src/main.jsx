@@ -11,13 +11,14 @@ import './index.css'
 // Son fire-and-forget: no bloquean nada, los errores se ignoran silenciosamente.
 function warmApis() {
   const ping = (url) => fetch(url, { method: 'GET' }).catch(() => {});
-  // Pequeño delay para no competir con los recursos críticos de la página
+  // Warm-up solo de health y products — banners tiene cache propio
+  // y NO va en el warm-up para no aparecer en la cadena crítica de carga de Lighthouse
   setTimeout(() => {
     ping('/api/health');
-    ping('/api/banners');
   }, 800);
   setTimeout(() => {
     ping('/api/products?limit=1');
+    ping('/api/products-meta');  // pre-cachear categorías
   }, 1500);
 }
 warmApis();

@@ -10,18 +10,27 @@ const fmtARS = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
 
 // ── Hook: carga la imagen solo cuando es visible en pantalla ──────────────────
+// priority=true → src se asigna inmediatamente + fetchpriority=high (LCP)
+// priority=false → IntersectionObserver real, src se asigna al entrar al viewport
 function useLazyImage(src, priority = false) {
   const ref          = useRef(null);
-  const [ready, setReady]   = useState(priority);  // prioridad = cargar ya
+  const [ready, setReady]   = useState(priority);
   const [loaded, setLoaded] = useState(false);
   const [error, setError]   = useState(false);
 
   useEffect(() => {
-    if (priority) { setReady(true); return; }
+    // Las imágenes prioritarias ya están ready desde el inicio
+    if (priority) return;
     if (!src) return;
 
     const el = ref.current;
     if (!el) return;
+
+    // Si IntersectionObserver no está disponible (SSR/viejo browser) → cargar igual
+    if (typeof IntersectionObserver === 'undefined') {
+      setReady(true);
+      return;
+    }
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -30,7 +39,7 @@ function useLazyImage(src, priority = false) {
           observer.disconnect();
         }
       },
-      { rootMargin: '200px' }   // empieza a cargar 200px antes de ser visible
+      { rootMargin: '300px' }  // empieza a cargar 300px antes de ser visible
     );
 
     observer.observe(el);
@@ -87,6 +96,7 @@ function ProductCard({ product, priority = false }) {
                 src={product.image_url}
                 alt={product.name}
                 decoding="async"
+                fetchpriority={priority ? 'high' : 'auto'}
                 width={240}
                 height={208}
                 onLoad={() => setLoaded(true)}

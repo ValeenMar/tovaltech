@@ -428,6 +428,8 @@ export default function StoreCatalog() {
           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
 
+        {/* Label visualmente oculto para accesibilidad — resuelve el warning de Lighthouse */}
+        <label htmlFor="catalog-sort" className="sr-only">Ordenar productos</label>
         <select id="catalog-sort" name="catalog-sort" value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(0); }}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[165px] hidden sm:block">
           {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}

@@ -36,15 +36,17 @@ module.exports = async function (context, req) {
         }
       } catch { /* rows pueden no existir */ }
 
-      context.res = {
-        status: 200, headers,
-        body: {
-          banners: result.recordset || [],
-          youtube_url: youtubeUrl,
-          banner_width:  bannerWidth,
-          banner_height: bannerHeight,
-        },
+      const responseBody = {
+        banners: result.recordset || [],
+        youtube_url: youtubeUrl,
+        banner_width:  bannerWidth,
+        banner_height: bannerHeight,
       };
+
+      // Guardar en cache solo para tienda
+      if (!isAdmin) setCache(responseBody);
+
+      context.res = { status: 200, headers, body: responseBody };
       return;
     }
 
@@ -52,6 +54,8 @@ module.exports = async function (context, req) {
     if (req.method === 'POST') {
       const body   = req.body || {};
       const action = body.action;
+      // Cualquier escritura invalida el cache
+      invalidateCache();
 
       // ── Guardar YouTube URL ────────────────────────────────────────────────
       if (action === 'set_youtube') {

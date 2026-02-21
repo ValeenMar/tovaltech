@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TovalTech</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
-    <!-- Preconnect: CDN de banners (mitiendanube) y fotos de productos (NewBytes) -->
-    <link rel="preconnect" href="https://dcdn-us.mitiendanube.com" crossorigin>
-    <link rel="preconnect" href="https://static.nb.com.ar" crossorigin>
+    <!-- Preconnect: CDN de banners (mitiendanube) y fotos de productos (NewBytes/Elit) -->
+    <!-- Sin crossorigin porque las imágenes son recursos normales, no CORS -->
+    <link rel="preconnect" href="https://dcdn-us.mitiendanube.com">
+    <link rel="preconnect" href="https://static.nb.com.ar">
+    <link rel="dns-prefetch" href="https://static.nb.com.ar">
+    <link rel="dns-prefetch" href="https://dcdn-us.mitiendanube.com">
     <!-- SEO básico -->
     <meta name="description" content="TovalTech — Tienda de tecnología y computación. Procesadores, placas de video, memorias RAM, almacenamiento, periféricos y más. Envíos a todo el país." />
   </head>
