@@ -46,6 +46,10 @@
       "allowedRoles": ["admin"]
     },
     {
+      "route": "/api/analytics*",
+      "allowedRoles": ["admin"]
+    },
+    {
       "route": "/api/banners",
       "methods": ["POST"],
       "allowedRoles": ["admin"]

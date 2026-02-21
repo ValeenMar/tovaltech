@@ -1,7 +1,9 @@
 // src/pages/Products.jsx
 // Panel admin — Catálogo con filtro por categoría, markup masivo y toggle visibilidad.
+// Lee el parámetro ?q= de la URL para que la búsqueda global del Topbar funcione.
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAdminProducts } from '../hooks/useAdminProducts'
 import { useApp } from '../context/AppContext'
 
@@ -61,8 +63,8 @@ function MarkupModal({ product, globalMarkup, onClose }) {
   }
 
   const TABS = [
-    { id: 'precio',      label: '💹 Precio' },
-    { id: 'contenido',   label: '✏️ Nombre y descripción' },
+    { id: 'precio',    label: '💹 Precio' },
+    { id: 'contenido', label: '✏️ Nombre y descripción' },
   ]
 
   return (
@@ -71,13 +73,11 @@ function MarkupModal({ product, globalMarkup, onClose }) {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg"
            onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
         <div className="px-6 pt-5 pb-3 border-b border-gray-100">
           <p className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold mb-0.5">Editar producto</p>
           <h3 className="font-bold text-gray-800 text-sm leading-snug line-clamp-2">{product.name}</h3>
         </div>
 
-        {/* Tabs */}
         <div className="flex border-b border-gray-100 px-6">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
@@ -90,7 +90,6 @@ function MarkupModal({ product, globalMarkup, onClose }) {
           ))}
         </div>
 
-        {/* Tab: Precio */}
         {tab === 'precio' && (
           <div className="px-6 py-5">
             <p className="text-xs text-gray-500 mb-3">
@@ -124,7 +123,6 @@ function MarkupModal({ product, globalMarkup, onClose }) {
           </div>
         )}
 
-        {/* Tab: Nombre y descripción */}
         {tab === 'contenido' && (
           <div className="px-6 py-5 space-y-4">
             <div>
@@ -154,13 +152,12 @@ function MarkupModal({ product, globalMarkup, onClose }) {
                 placeholder="Ficha técnica o descripción del producto..."
               />
               <p className="text-[10px] text-gray-400 mt-1">
-                Podés editar o corregir lo que generó la IA. Formato libre, sin límite.
+                Formato libre, sin límite.
               </p>
             </div>
           </div>
         )}
 
-        {/* Footer */}
         <div className="px-6 pb-5">
           {error  && <p className="text-xs text-red-500 mb-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
           {saved  && <p className="text-xs text-green-600 mb-3 bg-green-50 px-3 py-2 rounded-lg">✅ Guardado</p>}
@@ -268,6 +265,83 @@ function BulkMarkupModal({ category, globalMarkup, onClose }) {
   )
 }
 
+// ── Modal: markup masivo para productos seleccionados ─────────────────────────
+function BulkSelectionModal({ selected, globalMarkup, onClose }) {
+  const [value,  setValue]  = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved,  setSaved]  = useState(false)
+  const [error,  setError]  = useState(null)
+
+  const handleSave = async () => {
+    const markup = value === '' ? null : parseFloat(value)
+    if (markup !== null && (!Number.isFinite(markup) || markup < 0 || markup > 500)) {
+      setError('Ingresá un número entre 0 y 500'); return
+    }
+    setSaving(true); setError(null)
+    try {
+      // Aplica el markup a cada producto seleccionado en paralelo
+      await Promise.all(
+        selected.map(id =>
+          fetch(`/api/products/${id}/markup`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ markup_pct: markup }),
+          })
+        )
+      )
+      setSaved(true)
+      setTimeout(() => onClose(true), 1200)
+    } catch {
+      setError('Error al guardar uno o más productos')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+         onClick={() => onClose(false)}>
+      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+           onClick={e => e.stopPropagation()}>
+        <h3 className="font-bold text-gray-800 mb-1">
+          💹 Markup masivo — <span className="text-blue-600">{selected.length} productos</span>
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">
+          Aplica el mismo markup a los {selected.length} productos seleccionados.
+          Dejá vacío para volver al markup global ({globalMarkup ?? '—'}%).
+        </p>
+
+        <div className="flex items-center gap-2 mb-4">
+          <input
+            type="number" min="0" max="500" step="0.5"
+            placeholder={`Global (${globalMarkup ?? 0}%)`}
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center
+                       font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+            autoFocus
+          />
+          <span className="text-lg font-bold text-gray-500">%</span>
+        </div>
+
+        {error && <p className="text-xs text-red-500 mb-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+        {saved  && <p className="text-xs text-green-600 mb-3 bg-green-50 px-3 py-2 rounded-lg">✅ Guardado en {selected.length} productos</p>}
+
+        <div className="flex gap-2">
+          <button onClick={() => onClose(false)}
+            className="flex-1 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50">
+            Cancelar
+          </button>
+          <button onClick={handleSave} disabled={saving || saved}
+            className="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold
+                       hover:bg-blue-700 disabled:opacity-50">
+            {saving ? 'Guardando...' : `Aplicar a ${selected.length} productos`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Toggle visibilidad ────────────────────────────────────────────────────────
 function VisibilityToggle({ product, onToggled }) {
   const [loading, setLoading] = useState(false)
@@ -285,7 +359,7 @@ function VisibilityToggle({ product, onToggled }) {
       if (!res.ok) throw new Error()
       onToggled()
     } catch {
-      // silencio — el estado no cambia
+      // silencio
     } finally {
       setLoading(false)
     }
@@ -347,12 +421,23 @@ function FeaturedToggle({ product, onToggled }) {
 }
 
 // ── Vista LISTA ───────────────────────────────────────────────────────────────
-function ListView({ products, globalMarkup, onMarkup, onReload }) {
+function ListView({ products, globalMarkup, selected, onSelect, onSelectAll, onMarkup, onReload }) {
+  const allSelected = products.length > 0 && products.every(p => selected.has(p.id))
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="grid grid-cols-[1fr_110px_70px_105px_105px_100px_80px_72px_60px] px-4 py-2.5
+      <div className="grid grid-cols-[32px_1fr_110px_70px_105px_105px_100px_80px_72px_60px] px-4 py-2.5
                       bg-gray-50 border-b border-gray-200
                       text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+        {/* Checkbox seleccionar todos */}
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={() => onSelectAll(allSelected ? [] : products.map(p => p.id))}
+            className="w-3.5 h-3.5 rounded cursor-pointer"
+          />
+        </div>
         <span>Producto</span>
         <span>Proveedor / Cat.</span>
         <span className="text-center">Stock</span>
@@ -370,12 +455,25 @@ function ListView({ products, globalMarkup, onMarkup, onReload }) {
         const markupPct = p.markup_pct != null ? p.markup_pct : globalMarkup ?? 0
         const isCustom  = p.markup_pct != null
         const isActive  = p.active !== false && p.active !== 0
+        const isChecked = selected.has(p.id)
 
         return (
           <div key={p.id}
-            className={`grid grid-cols-[1fr_110px_70px_105px_105px_100px_80px_72px_60px]
+            className={`grid grid-cols-[32px_1fr_110px_70px_105px_105px_100px_80px_72px_60px]
                         px-4 py-3 text-sm border-b border-gray-100 last:border-0 items-center gap-1
-                        ${!isActive ? 'opacity-50 bg-gray-50/80' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                        ${isChecked ? 'bg-blue-50/60' :
+                          !isActive ? 'opacity-50 bg-gray-50/80' :
+                          i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+
+            {/* Checkbox individual */}
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                checked={isChecked}
+                onChange={() => onSelect(p.id)}
+                className="w-3.5 h-3.5 rounded cursor-pointer"
+              />
+            </div>
 
             {/* Nombre */}
             <div className="min-w-0">
@@ -383,13 +481,11 @@ function ListView({ products, globalMarkup, onMarkup, onReload }) {
               {p.brand && <p className="text-[10px] text-gray-400 truncate">{p.brand} · {p.sku}</p>}
             </div>
 
-            {/* Proveedor / Cat */}
             <div className="text-[10px] text-gray-500">
               <p className="capitalize font-medium truncate">{p.provider ?? '—'}</p>
               <p className="text-gray-400 truncate">{p.category ?? '—'}</p>
             </div>
 
-            {/* Stock */}
             <div className="text-center">
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
                 ${p.stock > 10 ? 'bg-green-100 text-green-700'
@@ -399,17 +495,14 @@ function ListView({ products, globalMarkup, onMarkup, onReload }) {
               </span>
             </div>
 
-            {/* Costo USD */}
             <div className="text-right text-xs text-gray-500 font-mono">
               {fmtUSD(p.price_usd_cost ?? p.price_usd)}
             </div>
 
-            {/* Neto */}
             <div className="text-right">
               <span className="text-xs font-bold text-blue-700 font-mono">{fmtARS(costArs)}</span>
             </div>
 
-            {/* Markup */}
             <div className="text-right">
               <button onClick={() => onMarkup(p)}
                 className={`text-xs font-semibold px-1.5 py-0.5 rounded cursor-pointer
@@ -420,17 +513,14 @@ function ListView({ products, globalMarkup, onMarkup, onReload }) {
               </button>
             </div>
 
-            {/* Venta ARS */}
             <div className="text-right">
               <span className="text-xs font-bold text-green-700 font-mono">{fmtARS(saleArs)}</span>
             </div>
 
-            {/* Toggle visibilidad */}
             <div className="flex justify-center">
               <VisibilityToggle product={p} onToggled={onReload} />
             </div>
 
-            {/* Toggle destacado */}
             <div className="flex justify-center">
               <FeaturedToggle product={p} onToggled={onReload} />
             </div>
@@ -446,20 +536,33 @@ function ListView({ products, globalMarkup, onMarkup, onReload }) {
 }
 
 // ── Vista GRILLA ──────────────────────────────────────────────────────────────
-function GridView({ products, globalMarkup, onMarkup, onReload }) {
+function GridView({ products, globalMarkup, selected, onSelect, onMarkup, onReload }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
       {products.map(p => {
-        const costArs  = p.price_ars_cost ?? p.price_ars
-        const saleArs  = p.price_ars
+        const costArs   = p.price_ars_cost ?? p.price_ars
+        const saleArs   = p.price_ars
         const hasCustom = p.markup_pct != null
         const isActive  = p.active !== false && p.active !== 0
+        const isChecked = selected.has(p.id)
 
         return (
           <div key={p.id}
-            className={`bg-white rounded-xl border overflow-hidden hover:shadow-md transition-all group
-              ${isActive ? 'border-gray-200' : 'border-red-200 opacity-60'}`}>
-            {/* Imagen */}
+            className={`bg-white rounded-xl border overflow-hidden hover:shadow-md transition-all group relative
+              ${isChecked ? 'border-blue-400 ring-2 ring-blue-200' :
+                isActive ? 'border-gray-200' : 'border-red-200 opacity-60'}`}>
+
+            {/* Checkbox en esquina */}
+            <div className="absolute top-2 left-2 z-10">
+              <input
+                type="checkbox"
+                checked={isChecked}
+                onChange={() => onSelect(p.id)}
+                className="w-4 h-4 rounded cursor-pointer shadow"
+                onClick={e => e.stopPropagation()}
+              />
+            </div>
+
             <div className="h-28 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
               {p.image_url
                 ? <img src={p.image_url} alt={p.name}
@@ -467,7 +570,6 @@ function GridView({ products, globalMarkup, onMarkup, onReload }) {
                     onError={e => { e.target.style.display = 'none' }} />
                 : <span className="text-4xl select-none">📦</span>
               }
-              {/* Acciones hover */}
               <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                 <button onClick={() => onMarkup(p)} title="Ajustar markup"
                   className="w-6 h-6 bg-blue-500 text-white rounded-full text-[10px]
@@ -475,7 +577,6 @@ function GridView({ products, globalMarkup, onMarkup, onReload }) {
                   %
                 </button>
               </div>
-              {/* Badge oculto */}
               {!isActive && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                   <span className="text-xs bg-red-500 text-white font-bold px-2 py-1 rounded">🚫 Oculto</span>
@@ -526,19 +627,31 @@ function GridView({ products, globalMarkup, onMarkup, onReload }) {
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function Products() {
   const { adminCategoryFilter, setAdminCategoryFilter } = useApp()
+  const [searchParams] = useSearchParams()
 
   const [search,          setSearch]          = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter,  setCategoryFilter]  = useState('')
   const [markupModal,     setMarkupModal]     = useState(null)
   const [bulkModal,       setBulkModal]       = useState(null)
+  const [bulkSelModal,    setBulkSelModal]    = useState(false)
+  const [selected,        setSelected]        = useState(new Set())
   const [vista,           setVista]           = useState('lista')
 
-  // Si venimos de Categorías con un filtro pre-seleccionado, aplicarlo una sola vez
+  // ── Leer búsqueda desde URL (?q=) — para que el buscador del Topbar funcione
+  useEffect(() => {
+    const q = searchParams.get('q')
+    if (q) {
+      setSearch(q)
+      setDebouncedSearch(q)
+    }
+  }, []) // solo al montar
+
+  // Si venimos de Categorías con un filtro pre-seleccionado
   useEffect(() => {
     if (adminCategoryFilter) {
       setCategoryFilter(adminCategoryFilter)
-      setAdminCategoryFilter('') // limpiar para la próxima vez
+      setAdminCategoryFilter('')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -557,15 +670,30 @@ export default function Products() {
   })
 
   const stats = useMemo(() => ({
-    sinStock:       products.filter(p => p.stock === 0).length,
+    sinStock:        products.filter(p => p.stock === 0).length,
     conMarkupCustom: products.filter(p => p.markup_pct != null).length,
-    ocultos:        products.filter(p => p.active === false || p.active === 0).length,
+    ocultos:         products.filter(p => p.active === false || p.active === 0).length,
   }), [products])
 
-  // Categoría seleccionada (para el modal de markup masivo)
   const selectedCategory = categoryFilter
     ? categories.find(c => c.name === categoryFilter)
     : null
+
+  // ── Handlers de selección ─────────────────────────────────────────────────
+  const handleSelect = useCallback((id) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const handleSelectAll = useCallback((ids) => {
+    setSelected(new Set(ids))
+  }, [])
+
+  const clearSelection = () => setSelected(new Set())
 
   return (
     <>
@@ -601,6 +729,26 @@ export default function Products() {
         </div>
       </div>
 
+      {/* ── Barra de selección masiva (aparece cuando hay productos seleccionados) */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-blue-600 rounded-xl text-white text-sm font-medium
+                        shadow-lg shadow-blue-200">
+          <span className="flex-1">
+            ✅ <strong>{selected.size}</strong> producto{selected.size !== 1 ? 's' : ''} seleccionado{selected.size !== 1 ? 's' : ''}
+          </span>
+          <button
+            onClick={() => setBulkSelModal(true)}
+            className="px-3 py-1.5 bg-white text-blue-600 rounded-lg font-semibold text-xs hover:bg-blue-50">
+            💹 Aplicar markup
+          </button>
+          <button
+            onClick={clearSelection}
+            className="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs hover:bg-blue-400">
+            Deseleccionar todo
+          </button>
+        </div>
+      )}
+
       {/* ── Leyenda ───────────────────────────────────────────────────────── */}
       {vista === 'lista' && !loading && (
         <div className="flex flex-wrap items-center gap-4 mb-4 text-xs text-gray-500">
@@ -613,12 +761,14 @@ export default function Products() {
           <span className="flex items-center gap-1.5">
             <span>🚫</span> Oculto — click para mostrar
           </span>
+          <span className="flex items-center gap-1.5">
+            <input type="checkbox" readOnly className="w-3 h-3" /> Seleccioná para markup masivo
+          </span>
         </div>
       )}
 
       {/* ── Filtros ───────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-3 mb-4 items-end">
-        {/* Búsqueda */}
         <input
           type="text"
           placeholder="🔍 Buscar por nombre, marca, SKU..."
@@ -628,7 +778,6 @@ export default function Products() {
                      focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
 
-        {/* Filtro por categoría */}
         <div className="flex items-center gap-2">
           <select
             value={categoryFilter}
@@ -644,7 +793,6 @@ export default function Products() {
             ))}
           </select>
 
-          {/* Botón markup masivo — solo aparece cuando hay categoría seleccionada */}
           {selectedCategory && (
             <button
               onClick={() => setBulkModal(selectedCategory)}
@@ -656,7 +804,6 @@ export default function Products() {
             </button>
           )}
 
-          {/* Limpiar filtros */}
           {(categoryFilter || search) && (
             <button
               onClick={() => { setCategoryFilter(''); setSearch('') }}
@@ -693,10 +840,16 @@ export default function Products() {
       {/* ── Contenido ─────────────────────────────────────────────────────── */}
       {!loading && !error && (
         vista === 'lista'
-          ? <ListView products={products} globalMarkup={globalMarkup}
-                      onMarkup={setMarkupModal} onReload={reload} />
-          : <GridView products={products} globalMarkup={globalMarkup}
-                      onMarkup={setMarkupModal} onReload={reload} />
+          ? <ListView
+              products={products} globalMarkup={globalMarkup}
+              selected={selected} onSelect={handleSelect} onSelectAll={handleSelectAll}
+              onMarkup={setMarkupModal} onReload={reload}
+            />
+          : <GridView
+              products={products} globalMarkup={globalMarkup}
+              selected={selected} onSelect={handleSelect}
+              onMarkup={setMarkupModal} onReload={reload}
+            />
       )}
 
       {/* ── Modales ───────────────────────────────────────────────────────── */}
@@ -713,6 +866,17 @@ export default function Products() {
           category={bulkModal}
           globalMarkup={globalMarkup}
           onClose={(saved) => { setBulkModal(null); if (saved) reload() }}
+        />
+      )}
+
+      {bulkSelModal && (
+        <BulkSelectionModal
+          selected={[...selected]}
+          globalMarkup={globalMarkup}
+          onClose={(saved) => {
+            setBulkSelModal(false)
+            if (saved) { clearSelection(); reload() }
+          }}
         />
       )}
     </>

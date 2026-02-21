@@ -1,82 +1,319 @@
+// src/pages/Analytics.jsx
+// Analíticas con datos reales desde /api/dashboard y /api/analytics.
+// Muestra: revenue mensual, top productos, desglose por zona y estado.
+
+import { useState, useEffect } from 'react'
 import StatCard from '../components/ui/StatCard'
-import { revenueChartData } from '../data/mockData'
 
-const colors = ['#6c63ff','#0078d4','#10b981','#f59e0b','#ef4444','#ec4899']
-const topProducts = [
-  { name: 'Laptop Pro X', sales: 84, pct: 100 },
-  { name: 'Monitor 4K', sales: 62, pct: 74 },
-  { name: 'Auriculares BT', sales: 51, pct: 61 },
-  { name: 'Tablet Air', sales: 38, pct: 45 },
-  { name: 'Teclado Mecánico', sales: 29, pct: 35 },
-]
-const archCards = [
-  { emoji: '⚛️', title: 'React + Vite', desc: 'Frontend SPA', bg: 'bg-blue-50', tag: 'Incluido en SWA' },
-  { emoji: '🔗', title: 'SWA API Routes', desc: 'Backend /api', bg: 'bg-green-50', tag: '✅ GRATIS' },
-  { emoji: '🗄️', title: 'Azure SQL', desc: 'Base de datos', bg: 'bg-yellow-50', tag: '✅ GRATIS 12m' },
-  { emoji: '🔐', title: 'AD B2C', desc: 'Autenticación', bg: 'bg-pink-50', tag: '✅ 50K gratis' },
-  { emoji: '📁', title: 'Blob Storage', desc: 'Facturas', bg: 'bg-purple-50', tag: '✅ 5GB gratis' },
-  { emoji: '📧', title: 'Comm. Services', desc: 'Emails', bg: 'bg-emerald-50', tag: '✅ GRATIS' },
+const fmtARS = (n) => new Intl.NumberFormat('es-AR', {
+  style: 'currency', currency: 'ARS', maximumFractionDigits: 0,
+}).format(n ?? 0)
+
+const fmtCompact = (n) => {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000)     return `$${(n / 1_000).toFixed(0)}K`
+  return fmtARS(n)
+}
+
+const BAR_COLORS = [
+  '#0078d4', '#6c63ff', '#10b981', '#f59e0b',
+  '#ef4444', '#ec4899', '#8b5cf6', '#06b6d4',
 ]
 
+const STATUS_LABELS = {
+  pending:   { label: 'Pendiente',  color: 'bg-orange-100 text-orange-700' },
+  paid:      { label: 'Pagado',     color: 'bg-blue-100 text-blue-700' },
+  shipped:   { label: 'En camino',  color: 'bg-purple-100 text-purple-700' },
+  delivered: { label: 'Entregado',  color: 'bg-green-100 text-green-700' },
+  cancelled: { label: 'Cancelado',  color: 'bg-red-100 text-red-700' },
+}
+
+const ZONE_LABELS = {
+  CABA:     'CABA',
+  GBA:      'Gran Bs. As.',
+  interior: 'Interior',
+}
+
+// ── Gráfico de barras reutilizable ────────────────────────────────────────────
+function BarChart({ data, valueKey, labelKey, height = 160, colorFn }) {
+  if (!data?.length) return (
+    <div className="flex items-center justify-center h-40 text-gray-300 text-sm">Sin datos</div>
+  )
+  const max = Math.max(...data.map(d => d[valueKey]), 1)
+  return (
+    <div className="flex items-end gap-1.5" style={{ height }}>
+      {data.map((d, i) => (
+        <div key={i} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group">
+          {/* Tooltip on hover */}
+          <div className="relative w-full flex flex-col items-center justify-end"
+               style={{ height: `${Math.max((d[valueKey] / max) * 100, 4)}%` }}>
+            <div
+              className="w-full rounded-t-md transition-opacity group-hover:opacity-75 relative"
+              style={{ height: '100%', background: colorFn ? colorFn(i) : BAR_COLORS[i % BAR_COLORS.length] }}
+            >
+              {/* Tooltip */}
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-[10px]
+                              px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100
+                              transition-opacity pointer-events-none z-10">
+                {typeof d[valueKey] === 'number' && d[valueKey] > 1000
+                  ? fmtCompact(d[valueKey])
+                  : d[valueKey]}
+              </div>
+            </div>
+          </div>
+          <span className="text-[9px] text-gray-400 text-center leading-tight w-full truncate px-0.5">
+            {d[labelKey]}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Componente principal ──────────────────────────────────────────────────────
 export default function Analytics() {
-  const max = Math.max(...revenueChartData.map(d => d.value))
+  const [dash,       setDash]       = useState(null)
+  const [analytics,  setAnalytics]  = useState(null)
+  const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState(null)
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/dashboard').then(r => { if (!r.ok) throw new Error(`dashboard ${r.status}`); return r.json() }),
+      fetch('/api/analytics').then(r => { if (!r.ok) throw new Error(`analytics ${r.status}`); return r.json() }),
+    ])
+      .then(([d, a]) => { setDash(d); setAnalytics(a) })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-64 text-gray-400">
+      <div className="animate-spin text-3xl mr-3">⚙️</div> Cargando analíticas...
+    </div>
+  )
+
+  if (error) return (
+    <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-sm text-red-700">
+      ⚠️ No se pudieron cargar las analíticas. {error}
+    </div>
+  )
+
+  const revenue     = dash?.revenue     ?? {}
+  const orders      = dash?.orders      ?? {}
+  const customers   = dash?.customers   ?? {}
+  const monthly     = analytics?.monthly_revenue  ?? []
+  const topProducts = analytics?.top_products     ?? []
+  const zones       = analytics?.zone_breakdown   ?? []
+  const statuses    = analytics?.status_breakdown ?? []
+
+  const totalOrders = orders.total ?? 0
+  const totalRevenuePrev = monthly.length >= 2
+    ? monthly[monthly.length - 2]?.revenue ?? 0
+    : 0
+  const totalRevenueCurr = monthly.length >= 1
+    ? monthly[monthly.length - 1]?.revenue ?? 0
+    : 0
+  const revenueChange = totalRevenuePrev > 0
+    ? (((totalRevenueCurr - totalRevenuePrev) / totalRevenuePrev) * 100).toFixed(1)
+    : null
+
+  const topRevenue = topProducts[0]?.revenue ?? 1
 
   return (
     <>
+      {/* ── Tarjetas resumen ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <StatCard icon="🌐" iconBg="bg-blue-100" value="12.4K" label="Visitas / mes" change="18%" up />
-        <StatCard icon="🔄" iconBg="bg-green-100" value="3.8%" label="Tasa conversión" change="5.2%" up />
-        <StatCard icon="⏱️" iconBg="bg-yellow-100" value="2m 34s" label="Tiempo promedio" change="12%" up={false} />
-        <StatCard icon="📧" iconBg="bg-pink-100" value="94.2%" label="Emails entregados" change="9%" up />
+        <StatCard
+          icon="💰" iconBg="bg-blue-100"
+          value={fmtCompact(revenue.total ?? 0)}
+          label="Ingresos totales"
+          change={revenueChange ? `${Math.abs(revenueChange)}%` : null}
+          up={revenueChange >= 0}
+        />
+        <StatCard
+          icon="📅" iconBg="bg-green-100"
+          value={fmtCompact(revenue.last30d ?? 0)}
+          label="Últimos 30 días"
+        />
+        <StatCard
+          icon="📦" iconBg="bg-yellow-100"
+          value={totalOrders.toLocaleString('es-AR')}
+          label="Pedidos totales"
+          change={orders.paid ? `${orders.paid} pagados` : null}
+          up
+        />
+        <StatCard
+          icon="👥" iconBg="bg-pink-100"
+          value={(customers.unique ?? 0).toLocaleString('es-AR')}
+          label="Clientes únicos"
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      {/* ── Gráficos fila 1 ───────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+        {/* Ingresos mensuales */}
         <div className="bg-white rounded-xl p-5 border border-gray-200">
-          <h3 className="font-semibold mb-4">📈 Ingresos mensuales</h3>
-          <div className="flex items-end gap-2 h-40">
-            {revenueChartData.map((d, i) => (
-              <div key={d.label} className="flex-1 flex flex-col items-center gap-1.5">
-                <div className="w-full rounded-t-md hover:opacity-80 transition-all duration-500"
-                  style={{ height: `${(d.value / max) * 100}%`, background: colors[i] }} />
-                <span className="text-[10px] text-gray-400">{d.label}</span>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-800">📈 Ingresos mensuales</h3>
+            <span className="text-xs text-gray-400">Últimos 6 meses</span>
+          </div>
+          {monthly.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-gray-300 text-sm">
+              Sin pedidos en el período
+            </div>
+          ) : (
+            <>
+              <BarChart data={monthly} valueKey="revenue" labelKey="label" height={160} />
+              {/* Totales debajo */}
+              <div className="mt-3 pt-3 border-t border-gray-50 flex justify-between text-xs text-gray-500">
+                <span>Total período: <strong className="text-gray-700">{fmtCompact(monthly.reduce((s,m) => s + m.revenue, 0))}</strong></span>
+                <span>{monthly.reduce((s,m) => s + m.orders, 0)} pedidos</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Top productos */}
+        <div className="bg-white rounded-xl p-5 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-800">🏆 Top Productos</h3>
+            <span className="text-xs text-gray-400">Por ingresos</span>
+          </div>
+          {topProducts.length === 0 ? (
+            <div className="flex items-center justify-center h-40 text-gray-300 text-sm">
+              Sin ventas registradas
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {topProducts.slice(0, 6).map((p, i) => (
+                <div key={p.title} className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-gray-300 w-5 text-right flex-shrink-0">#{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-center mb-1">
+                      <p className="text-xs font-semibold text-gray-700 truncate pr-2">{p.title}</p>
+                      <span className="text-xs font-bold text-gray-800 flex-shrink-0">{fmtCompact(p.revenue)}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${(p.revenue / topRevenue) * 100}%`,
+                          background: BAR_COLORS[i % BAR_COLORS.length],
+                        }}
+                      />
+                    </div>
+                    <div className="flex gap-3 mt-0.5">
+                      <span className="text-[10px] text-gray-400">{p.units_sold} uds</span>
+                      <span className="text-[10px] text-gray-400">{p.order_count} pedidos</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Gráficos fila 2 ───────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+
+        {/* Desglose por zona */}
+        <div className="bg-white rounded-xl p-5 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-800">📍 Desglose por zona</h3>
+          </div>
+          {zones.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-gray-300 text-sm">Sin datos</div>
+          ) : (
+            <div className="space-y-3">
+              {(() => {
+                const maxOrders = Math.max(...zones.map(z => z.orders), 1)
+                return zones.map((z, i) => (
+                  <div key={z.zone}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-semibold text-gray-700">
+                        {ZONE_LABELS[z.zone] ?? z.zone}
+                      </span>
+                      <div className="flex gap-4 text-gray-500">
+                        <span>{z.orders} pedidos</span>
+                        <span className="font-semibold text-gray-700">{fmtCompact(z.revenue)}</span>
+                      </div>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${(z.orders / maxOrders) * 100}%`,
+                          background: BAR_COLORS[i % BAR_COLORS.length],
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))
+              })()}
+            </div>
+          )}
+        </div>
+
+        {/* Distribución por estado */}
+        <div className="bg-white rounded-xl p-5 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-800">📊 Estado de pedidos</h3>
+            <span className="text-xs text-gray-400">{totalOrders} total</span>
+          </div>
+          {statuses.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-gray-300 text-sm">Sin datos</div>
+          ) : (
+            <div className="space-y-2.5">
+              {statuses.map(s => {
+                const meta = STATUS_LABELS[s.status] ?? { label: s.status, color: 'bg-gray-100 text-gray-600' }
+                const pct  = totalOrders > 0 ? Math.round((s.total / totalOrders) * 100) : 0
+                return (
+                  <div key={s.status} className="flex items-center gap-3">
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full w-24 text-center flex-shrink-0 ${meta.color}`}>
+                      {meta.label}
+                    </span>
+                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-blue-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500 w-16 justify-end flex-shrink-0">
+                      <span className="font-semibold text-gray-700">{s.total}</span>
+                      <span>({pct}%)</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Últimos 7 días (del dashboard) ───────────────────────────────── */}
+      {dash?.daily_chart?.length > 0 && (
+        <div className="bg-white rounded-xl p-5 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-800">📆 Últimos 7 días</h3>
+            <span className="text-xs text-gray-400">Pedidos e ingresos por día</span>
+          </div>
+          <div className="grid grid-cols-7 gap-2">
+            {dash.daily_chart.map((d, i) => (
+              <div key={i} className="text-center">
+                <div className="bg-blue-50 rounded-lg p-2.5 mb-1.5">
+                  <p className="text-sm font-bold text-blue-700">{d.orders}</p>
+                  <p className="text-[10px] text-blue-400">ped.</p>
+                </div>
+                <p className="text-[10px] text-gray-500 font-medium">{fmtCompact(d.revenue)}</p>
+                <p className="text-[9px] text-gray-400 capitalize">{d.label}</p>
               </div>
             ))}
           </div>
         </div>
-        <div className="bg-white rounded-xl p-5 border border-gray-200">
-          <h3 className="font-semibold mb-4">🏆 Top Productos</h3>
-          {topProducts.map((p, i) => (
-            <div key={p.name} className="flex items-center gap-3 py-2">
-              <span className="text-xs text-gray-400 w-5">#{i + 1}</span>
-              <div className="flex-1">
-                <div className="text-sm font-semibold mb-1">{p.name}</div>
-                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-r from-azure-500 to-violet-500" style={{ width: `${p.pct}%` }} />
-                </div>
-              </div>
-              <span className="text-sm font-semibold">{p.sales}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="bg-white rounded-xl p-5 border border-gray-200">
-        <h3 className="font-semibold mb-4">⚡ Arquitectura Azure — Todo Gratis</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {archCards.map(c => (
-            <div key={c.title} className={`${c.bg} rounded-lg p-4 text-center`}>
-              <div className="text-3xl mb-1">{c.emoji}</div>
-              <strong className="text-xs">{c.title}</strong><br />
-              <small className="text-gray-400 text-[11px]">{c.desc}</small><br />
-              <span className="inline-block mt-1.5 text-[9px] px-1.5 py-0.5 rounded bg-green-100 text-green-800 font-bold">{c.tag}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-4 p-3.5 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg text-sm border border-dashed border-azure-500">
-          <strong>💡 Cambio clave:</strong> En vez de Azure Functions, usamos las <strong>API Routes integradas de Static Web Apps</strong>.
-          Solo creas una carpeta <code className="bg-white px-1 rounded">/api</code> y Azure despliega las funciones automáticamente.
-        </div>
-      </div>
+      )}
     </>
   )
 }

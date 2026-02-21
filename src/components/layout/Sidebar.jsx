@@ -13,15 +13,38 @@ const navItems = [
   { key: 'settings',   path: '/admin/settings',    icon: '⚙️', label: 'Configuración',  section: 'Sistema' },
 ]
 
+// ── Logo TovalTech (mismo que usa la tienda en Navbar.jsx) ────────────────────
+function TovalTechLogo({ collapsed }) {
+  return (
+    <div className="flex items-center gap-3">
+      {/* Chip / circuit icon — idéntico al de la tienda */}
+      <div className="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center flex-shrink-0
+                      ring-1 ring-white/20 shadow-sm">
+        <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="none"
+             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="9" width="6" height="6" rx="1"/>
+          <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
+          <rect x="4" y="4" width="16" height="16" rx="2"/>
+        </svg>
+      </div>
+      {!collapsed && (
+        <span className="text-base font-bold tracking-tight leading-none">
+          Toval<span className="text-blue-300">Tech</span>
+          <span className="block text-[9px] font-normal text-white/40 tracking-widest uppercase mt-0.5">
+            Admin Panel
+          </span>
+        </span>
+      )}
+    </div>
+  )
+}
+
 export default function Sidebar() {
   const navigate  = useNavigate()
   const location  = useLocation()
   const { sidebarOpen, setSidebarOpen } = useApp()
   const sections  = [...new Set(navItems.map(i => i.section))]
 
-  // Determina si un item está activo:
-  // - /admin (index) → activo solo si pathname === '/admin' exacto
-  // - resto → activo si pathname empieza con el path del item
   const isActive = (item) => {
     if (item.path === '/admin') return location.pathname === '/admin'
     return location.pathname.startsWith(item.path)
@@ -46,9 +69,8 @@ export default function Sidebar() {
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-16'}
       `}>
         {/* Logo */}
-        <div className="px-4 py-5 flex items-center gap-3 border-b border-white/10 shrink-0">
-          <span className="text-2xl">⚡</span>
-          {sidebarOpen && <h1 className="text-lg font-bold tracking-tight">AzurePanel</h1>}
+        <div className="px-4 py-5 flex items-center border-b border-white/10 shrink-0">
+          <TovalTechLogo collapsed={!sidebarOpen} />
         </div>
 
         {/* Nav */}

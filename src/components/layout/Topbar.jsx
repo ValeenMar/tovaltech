@@ -1,11 +1,11 @@
 // src/components/layout/Topbar.jsx
-// Topbar del admin con campanita funcional:
-// - Muestra pedidos pendientes y stock crítico
-// - Sonido FNAF (honk de la nariz de Freddy) al hacer click
-// - Panel deslizable con notificaciones reales desde /api/dashboard
+// Topbar del admin:
+// - Búsqueda global funcional: Enter navega a /admin/products?q=término
+// - Campanita con pedidos pendientes y stock crítico
+// - Sonido FNAF (honk de la nariz de Freddy) al hacer click en la campana
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useApp } from '../../context/AppContext'
 
 const pageTitles = {
@@ -21,8 +21,6 @@ const pageTitles = {
 }
 
 // ── FNAF Freddy Fazbear nose honk ──────────────────────────────────────────────
-// Síntesis de audio puro — no necesita ningún archivo externo.
-// Dos osciladores: uno para el cuerpo del honk, uno para el armónico.
 function playFNAFHonk() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)()
@@ -31,7 +29,6 @@ function playFNAFHonk() {
     const osc2  = ctx.createOscillator()
     const gain1 = ctx.createGain()
     const gain2 = ctx.createGain()
-    // Distorsión leve para que suene a juguete/bocina
     const wave  = ctx.createWaveShaper()
     const curve = new Float32Array(256)
     for (let i = 0; i < 256; i++) {
@@ -43,13 +40,11 @@ function playFNAFHonk() {
     osc1.type = 'sawtooth'
     osc2.type = 'sine'
 
-    // Frecuencia base del honk: baja rápido para dar el efecto "beeep-boop"
     osc1.frequency.setValueAtTime(420, ctx.currentTime)
     osc1.frequency.exponentialRampToValueAtTime(260, ctx.currentTime + 0.18)
     osc2.frequency.setValueAtTime(840, ctx.currentTime)
     osc2.frequency.exponentialRampToValueAtTime(520, ctx.currentTime + 0.18)
 
-    // Envelope: ataque rápido, decay suave
     gain1.gain.setValueAtTime(0,    ctx.currentTime)
     gain1.gain.linearRampToValueAtTime(0.45, ctx.currentTime + 0.012)
     gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.42)
@@ -69,7 +64,6 @@ function playFNAFHonk() {
     osc1.stop(ctx.currentTime + 0.5)
     osc2.stop(ctx.currentTime + 0.5)
 
-    // Liberar contexto cuando termina
     setTimeout(() => ctx.close(), 600)
   } catch (e) {
     // Navegadores sin Web Audio API — fail silencioso
@@ -86,7 +80,6 @@ const fmtDate = (d) =>
 function NotifPanel({ open, onClose, data, loading }) {
   const ref = useRef(null)
 
-  // Cerrar al hacer click fuera
   useEffect(() => {
     if (!open) return
     const handler = (e) => {
@@ -115,7 +108,6 @@ function NotifPanel({ open, onClose, data, loading }) {
         }
       `}</style>
 
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
         <span className="font-semibold text-gray-800 text-sm">🔔 Notificaciones</span>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
@@ -126,7 +118,6 @@ function NotifPanel({ open, onClose, data, loading }) {
       ) : (
         <div className="max-h-96 overflow-y-auto">
 
-          {/* Pedidos pendientes */}
           {pendingOrders > 0 && (
             <div className="mx-3 mt-3 mb-1 bg-orange-50 border border-orange-100 rounded-xl p-3">
               <div className="flex items-center gap-2">
@@ -141,7 +132,6 @@ function NotifPanel({ open, onClose, data, loading }) {
             </div>
           )}
 
-          {/* Stock crítico */}
           {lowStock.length > 0 && (
             <div className="px-3 pt-2 pb-1">
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-1">
@@ -162,7 +152,6 @@ function NotifPanel({ open, onClose, data, loading }) {
             </div>
           )}
 
-          {/* Pedidos recientes */}
           {recentOrders.length > 0 && (
             <div className="px-3 pt-2 pb-2">
               <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-1 mb-1">
@@ -205,6 +194,7 @@ function NotifPanel({ open, onClose, data, loading }) {
 // ── Topbar principal ───────────────────────────────────────────────────────────
 export default function Topbar() {
   const location  = useLocation()
+  const navigate  = useNavigate()
   const { sidebarOpen, setSidebarOpen } = useApp()
   const title     = pageTitles[location.pathname] ?? 'Admin'
 
@@ -213,19 +203,36 @@ export default function Topbar() {
   const [notifLoading, setNotifLoading] = useState(false)
   const [notifCount, setNotifCount]     = useState(0)
 
-  // Cargar datos reales de notificaciones
+  // ── Búsqueda global ──────────────────────────────────────────────────────
+  const [searchValue, setSearchValue] = useState('')
+
+  const handleSearch = (e) => {
+    e.preventDefault()
+    const q = searchValue.trim()
+    if (!q) return
+    // Navega a productos con el término de búsqueda como query param
+    // Products.jsx lo lee desde la URL al montar
+    navigate(`/admin/products?q=${encodeURIComponent(q)}`)
+    setSearchValue('')
+  }
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Escape') setSearchValue('')
+  }
+
+  // ── Notificaciones ───────────────────────────────────────────────────────
   const loadNotifs = useCallback(async () => {
     if (notifLoading) return
     setNotifLoading(true)
     try {
       const res  = await fetch('/api/dashboard')
       const data = await res.json()
-      const pending  = data.stats?.pending_orders ?? 0
+      const pending  = data.orders?.pending ?? 0
       const lowStock = data.low_stock_products ?? []
       setNotifData({
-        pending_orders:    pending,
+        pending_orders:     pending,
         low_stock_products: lowStock,
-        recent_orders:     data.recent_orders ?? [],
+        recent_orders:      data.recent_orders ?? [],
       })
       setNotifCount(pending + lowStock.length)
     } catch {
@@ -235,7 +242,6 @@ export default function Topbar() {
     }
   }, [notifLoading])
 
-  // Cargar al montar y refrescar cada 2 minutos
   useEffect(() => {
     loadNotifs()
     const interval = setInterval(loadNotifs, 2 * 60 * 1000)
@@ -260,13 +266,20 @@ export default function Topbar() {
       </div>
 
       <div className="flex items-center gap-4">
-        <input
-          id="admin-search"
-          name="admin-search"
-          type="text"
-          placeholder="🔍 Buscar..."
-          className="hidden sm:block bg-gray-100 border border-gray-200 rounded-lg px-3.5 py-2 text-sm w-60 outline-none focus:border-blue-400 transition-colors"
-        />
+        {/* 🔍 Búsqueda global — navega a Productos al hacer Enter */}
+        <form onSubmit={handleSearch} className="hidden sm:block">
+          <input
+            id="admin-search"
+            name="admin-search"
+            type="text"
+            value={searchValue}
+            onChange={e => setSearchValue(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            placeholder="🔍 Buscar productos..."
+            className="bg-gray-100 border border-gray-200 rounded-lg px-3.5 py-2 text-sm w-60
+                       outline-none focus:border-blue-400 focus:bg-white transition-all"
+          />
+        </form>
 
         {/* 🔔 Campanita con panel */}
         <div className="relative">
