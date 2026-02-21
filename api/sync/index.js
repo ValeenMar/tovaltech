@@ -233,19 +233,21 @@ async function mergeProducts(pool, products) {
 // ── Sync de categorías nuevas (sync agrega automáticamente al catálogo) ────────
 
 async function syncNewCategories(pool, products) {
-  // Inserta en tovaltech_categories las categorías nuevas que lleguen del sync
-  // (solo las que no existen aún; no toca markup)
   const cats = [...new Set(products.map(p => p.category).filter(Boolean))];
   if (!cats.length) return;
 
-  for (const cat of cats) {
-    await pool.request()
-      .input('name', cat)
-      .query(`
-        IF NOT EXISTS (SELECT 1 FROM dbo.tovaltech_categories WHERE name = @name)
-          INSERT INTO dbo.tovaltech_categories (name) VALUES (@name);
-      `);
-  }
+  // Una sola query en lugar de N — mucho más rápido
+  // Construimos un INSERT con todos los valores y usamos MERGE para ignorar duplicados
+  const values = cats.map((_, i) => `(@cat${i})`).join(', ');
+  const req = pool.request();
+  cats.forEach((cat, i) => req.input(`cat${i}`, cat));
+
+  await req.query(`
+    MERGE dbo.tovaltech_categories AS t
+    USING (VALUES ${values}) AS s(name) ON t.name = s.name
+    WHEN NOT MATCHED THEN
+      INSERT (name) VALUES (s.name);
+  `);
 }
 
 function chunk(arr, size) {
