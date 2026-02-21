@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useSEO } from '../../hooks/useSEO'
 import { Link } from 'react-router-dom'
-import HeroSection from '../../components/store/HeroSection'
+import HeroSection, { fetchBannersOnce } from '../../components/store/HeroSection'
 import ProductCard from '../../components/store/ProductCard'
 import { useProducts } from '../../hooks/useProducts'
 
@@ -107,18 +107,11 @@ export default function Home() {
   useSEO({ title: 'Inicio', description: 'TovalTech — Tienda de tecnología y computación. Procesadores, placas de video, memorias RAM, almacenamiento, periféricos y más. Envíos a todo el país.' })
   const [youtubeId, setYoutubeId] = useState(null)
 
-  // Cargar YouTube URL desde la API de banners (misma llamada que el hero)
-  // Timeout de 4s para no bloquear el render si la Function está en cold start
+  // Cargar YouTube URL — reutiliza el cache de HeroSection, no hace una segunda llamada
   useEffect(() => {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 4000)
-    fetch('/api/banners', { signal: controller.signal })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => {
-        if (d?.youtube_url) setYoutubeId(extractYoutubeId(d.youtube_url))
-      })
-      .catch(() => {})
-      .finally(() => clearTimeout(timeout))
+    fetchBannersOnce().then(d => {
+      if (d?.youtube_url) setYoutubeId(extractYoutubeId(d.youtube_url))
+    })
   }, [])
 
   // Destacados: primero featured=true, máximo 4. Si no alcanza, completa con los primeros.

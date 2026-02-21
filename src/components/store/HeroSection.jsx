@@ -8,6 +8,24 @@ import { Link } from 'react-router-dom'
 
 const INTERVAL = 5000 // ms entre slides
 
+// ── Cache de módulo para evitar llamar /api/banners dos veces por página ──────
+// Home.jsx también llama a esta API. Al cachear acá, la segunda llamada es gratis.
+let bannersCache = null
+let bannersPromise = null
+
+export function fetchBannersOnce() {
+  if (bannersCache) return Promise.resolve(bannersCache)
+  if (bannersPromise) return bannersPromise
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5000)
+  bannersPromise = fetch('/api/banners', { signal: controller.signal })
+    .then(r => r.ok ? r.json() : { banners: [] })
+    .then(d => { bannersCache = d; return d })
+    .catch(() => { bannersCache = { banners: [] }; return bannersCache })
+    .finally(() => clearTimeout(timeout))
+  return bannersPromise
+}
+
 // ── Hero estático (fallback sin banners) ──────────────────────────────────────
 function DefaultHero() {
   return (
@@ -79,10 +97,14 @@ function Carousel({ banners, width, height }) {
             <a href={b.link_url} {...(b.link_url.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                className="block w-full h-full">
               <img src={b.image_url} alt={b.title || `Banner ${i + 1}`}
+                   loading={i === 0 ? 'eager' : 'lazy'}
+                   fetchpriority={i === 0 ? 'high' : 'auto'}
                    className="w-full h-full object-cover" draggable={false} />
             </a>
           ) : (
             <img src={b.image_url} alt={b.title || `Banner ${i + 1}`}
+                 loading={i === 0 ? 'eager' : 'lazy'}
+                 fetchpriority={i === 0 ? 'high' : 'auto'}
                  className="w-full h-full object-cover" draggable={false} />
           )}
 
@@ -140,14 +162,11 @@ export default function HeroSection() {
   const [bannerHeight, setBannerHeight] = useState(500)
 
   useEffect(() => {
-    fetch('/api/banners')
-      .then(r => r.ok ? r.json() : { banners: [] })
-      .then(d => {
-        setBanners(d.banners || [])
-        if (d.banner_width)  setBannerWidth(d.banner_width)
-        if (d.banner_height) setBannerHeight(d.banner_height)
-      })
-      .catch(() => setBanners([]))
+    fetchBannersOnce().then(d => {
+      setBanners(d.banners || [])
+      if (d.banner_width)  setBannerWidth(d.banner_width)
+      if (d.banner_height) setBannerHeight(d.banner_height)
+    })
   }, [])
 
   // Mientras carga → hero estático (evita layout shift)
