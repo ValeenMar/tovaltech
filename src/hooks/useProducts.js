@@ -31,10 +31,12 @@ export function useProducts(filters = {}) {
     setError(null);
 
     const params = new URLSearchParams();
-    if (filters.categoria) params.append('categoria', filters.categoria);
-    if (filters.buscar)    params.append('buscar',    filters.buscar);
-    if (filters.limit)     params.append('limit',     filters.limit);
-    if (filters.offset)    params.append('offset',    filters.offset);
+    if (filters.categoria)    params.append('categoria', filters.categoria);
+    if (filters.hijos)        params.append('hijos',     filters.hijos);
+    if (filters.subcategoria) params.append('subcategoria', filters.subcategoria);
+    if (filters.buscar)       params.append('buscar',    filters.buscar);
+    if (filters.limit)        params.append('limit',     filters.limit);
+    if (filters.offset)       params.append('offset',    filters.offset);
 
     fetch(`/api/products?${params}`, { signal: controller.signal })
       .then(r => {
@@ -75,7 +77,7 @@ export function useProducts(filters = {}) {
 
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.categoria, filters.buscar, filters.limit, filters.offset]);
+  }, [filters.categoria, filters.hijos, filters.subcategoria, filters.buscar, filters.limit, filters.offset]);
 
   return { products, total, loading, error, fromApi };
 }

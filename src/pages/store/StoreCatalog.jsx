@@ -35,13 +35,22 @@ function ParentCategoryItem({ cat, activeCategory, onCategoryChange, onSubcatCha
   const isActive      = activeCategory === cat.name;
   const hasChildren   = children && children.length > 0;
   const childIsActive = hasChildren && children.some(c => activeCategory === c.name);
+  // open es INDEPENDIENTE de isActive — solo controla si el acordeón está expandido
   const [open, setOpen] = useState(isActive || childIsActive);
 
-  const shouldBeOpen = isActive || childIsActive;
+  // Si una categoría hija se activa externamente, aseguramos que el padre esté abierto
+  // Pero NO forzamos open cuando isActive — así se puede colapsar aunque esté seleccionado
+  if (childIsActive && !open) setOpen(true);
 
   const handleClick = () => {
     if (hasChildren) {
-      setOpen(o => !o);
+      if (isActive) {
+        // Ya está seleccionado → solo toggle el acordeón
+        setOpen(o => !o);
+        return;
+      }
+      // Primera vez que se clickea → abrir y seleccionar
+      setOpen(true);
     }
     onCategoryChange(cat.name);
     onSubcatChange(null);
@@ -70,7 +79,7 @@ function ParentCategoryItem({ cat, activeCategory, onCategoryChange, onSubcatCha
         </div>
       </button>
 
-      {hasChildren && (open || shouldBeOpen) && (
+      {hasChildren && open && (
         <div className="border-l-2 border-blue-100 ml-4 mb-0.5">
           {children.map(child => (
             <button
@@ -239,7 +248,13 @@ function MobileCatItem({ cat, hasChildren, childIsActive, isActive, activeCatego
     <div>
       <button
         onClick={() => {
-          if (hasChildren) setLocalOpen(o => !o);
+          if (hasChildren) {
+            if (isActive) {
+              setLocalOpen(o => !o);
+              return;
+            }
+            setLocalOpen(true);
+          }
           onCategoryChange(cat.name);
           onSubcatChange(null);
           if (!hasChildren) onClose();
@@ -252,7 +267,7 @@ function MobileCatItem({ cat, hasChildren, childIsActive, isActive, activeCatego
         <span>{cat.name}</span>
         {hasChildren && <ChevronIcon open={localOpen || isActive || childIsActive} />}
       </button>
-      {hasChildren && (localOpen || isActive || childIsActive) && (
+      {hasChildren && localOpen && (
         <div className="border-l-2 border-blue-100 ml-5">
           {cat.children.map(child => (
             <button key={child.id ?? child.name}
