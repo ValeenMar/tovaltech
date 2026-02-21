@@ -58,22 +58,3 @@
     "apiRuntime": "node:18"
   }
 }
-{
-  "route": "/*",
-  "redirect": "https://www.tovaltech.com.ar",
-  "statusCode": 301,
-  "conditions": {
-    "header": {
-      "host": "gray-rock-0602a4f1e.2.azurestaticapps.net"
-    }
-  }
-{
-  "route": "/*",
-  "redirect": "https://www.tovaltech.com.ar",
-  "statusCode": 301,
-  "conditions": {
-    "header": {
-      "host": "gray-rock-0602a4f1e.2.azurestaticapps.net"
-    }
-  }
-}
