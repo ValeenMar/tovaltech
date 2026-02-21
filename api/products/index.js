@@ -27,11 +27,13 @@ async function getMarkupSettings(pool, forceRefresh = false) {
     return _markupCache;
   }
 
-  // Un solo query con UNION ALL para traer global + por categoría en 1 viaje
-  const [settingsRes, catRes] = await Promise.all([
-    pool.request().query(`SELECT value FROM dbo.tovaltech_settings WHERE key_name = 'global_markup_pct'`),
-    pool.request().query(`SELECT name, markup_pct FROM ${CATEGORY_TABLE} WHERE markup_pct IS NOT NULL`),
-  ]);
+  // Dos queries secuenciales — mssql no soporta bien paralelas en el mismo pool
+  const settingsRes = await pool.request().query(
+    `SELECT value FROM dbo.tovaltech_settings WHERE key_name = 'global_markup_pct'`
+  );
+  const catRes = await pool.request().query(
+    `SELECT name, markup_pct FROM ${CATEGORY_TABLE} WHERE markup_pct IS NOT NULL`
+  );
 
   const globalMarkupPct = parseFloat(settingsRes.recordset?.[0]?.value ?? '0');
   const categoryMarkup  = {};
@@ -105,14 +107,14 @@ module.exports = async function (context, req) {
     itemsReq.input('offset', offset);
     itemsReq.input('limit',  limit);
 
-    const [countRes, items] = await Promise.all([
-      countReq.query(`SELECT COUNT(1) AS total FROM dbo.tovaltech_products ${whereSql}`),
-      itemsReq.query(`
-        SELECT * FROM dbo.tovaltech_products ${whereSql}
-        ORDER BY featured DESC, updated_at DESC, id DESC
-        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
-      `),
-    ]);
+    const countRes = await countReq.query(
+      `SELECT COUNT(1) AS total FROM dbo.tovaltech_products ${whereSql}`
+    );
+    const items = await itemsReq.query(`
+      SELECT * FROM dbo.tovaltech_products ${whereSql}
+      ORDER BY featured DESC, updated_at DESC, id DESC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `);
 
     const total = countRes.recordset?.[0]?.total ?? 0;
 
