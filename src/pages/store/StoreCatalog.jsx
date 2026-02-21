@@ -110,7 +110,7 @@ const FilterSidebar = memo(({ categoryTree, categories, activeCategory, activeSu
       {dolarRate && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
           <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider mb-1">Tipo de cambio</p>
-          <p className="font-bold text-gray-800 text-sm">1 USD = ${"{"}dolarRate.toLocaleString('es-AR'){"}"} ARS</p>
+          <p className="font-bold text-gray-800 text-sm">1 USD = ${dolarRate.toLocaleString('es-AR')} ARS</p>
           <p className="text-[11px] text-gray-400">Dólar oficial</p>
         </div>
       )}
@@ -382,7 +382,7 @@ export default function StoreCatalog() {
       <div className="mb-5">
         <h1 className="text-2xl font-bold text-gray-800">Nuestros Productos</h1>
         <p className="text-gray-400 text-sm mt-0.5">
-          {loading ? 'Cargando...' : `${"{"}total.toLocaleString('es-AR'){"}"} producto${"{"}total !== 1 ? 's' : ''{"}"} disponibles`}
+          {loading ? 'Cargando...' : `${total.toLocaleString('es-AR')} producto${total !== 1 ? 's' : ''} disponibles`}
         </p>
         {parentOfActive && (
           <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-400">
@@ -390,7 +390,7 @@ export default function StoreCatalog() {
               {parentOfActive.name}
             </button>
             <span>›</span>
-            <span className="text-gray-600 font-medium">{"{"}activeCategory{"}"}</span>
+            <span className="text-gray-600 font-medium">{activeCategory}</span>
           </div>
         )}
       </div>
@@ -400,28 +400,28 @@ export default function StoreCatalog() {
           className="lg:hidden flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 flex-shrink-0">
           ☰
           {activeFiltersCount > 0 && (
-            <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{"{"}activeFiltersCount{"}"}</span>
+            <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{activeFiltersCount}</span>
           )}
         </button>
 
         <input id="catalog-search" name="catalog-search" type="text"
           placeholder="🔍 Buscar por nombre o marca..."
-          value={"{"}inputValue{"}"}
+          value={inputValue}
           onChange={e => setInputValue(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSearch(inputValue)}
           onBlur={() => inputValue !== searchTerm && handleSearch(inputValue)}
           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
 
-        <select id="catalog-sort" name="catalog-sort" value={"{"}sortBy{"}"} onChange={e => { setSortBy(e.target.value); setPage(0); }}
+        <select id="catalog-sort" name="catalog-sort" value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(0); }}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[165px] hidden sm:block">
-          {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{"{"}o.label{"}"}</option>)}
+          {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
 
         {activeCategory !== 'Todos' && (
           <button onClick={() => handleCategoryChange('Todos')}
             className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 flex-shrink-0 whitespace-nowrap">
-            <span className="capitalize max-w-[120px] truncate">{"{"}activeCategory{"}"}</span>
+            <span className="capitalize max-w-[120px] truncate">{activeCategory}</span>
             <span className="text-blue-400">✕</span>
           </button>
         )}
@@ -429,13 +429,13 @@ export default function StoreCatalog() {
 
       <div className="flex gap-5">
         <FilterSidebar
-          categories={"{"}categories{"}"}
-          categoryTree={"{"}categoryTree{"}"}
-          activeCategory={"{"}activeCategory{"}"}
-          activeSubcat={"{"}activeSubcat{"}"}
-          onCategoryChange={"{"}handleCategoryChange{"}"}
-          onSubcatChange={"{"}handleSubcatChange{"}"}
-          dolarRate={"{"}dolarRate{"}"}
+          categories={categories}
+          categoryTree={categoryTree}
+          activeCategory={activeCategory}
+          activeSubcat={activeSubcat}
+          onCategoryChange={handleCategoryChange}
+          onSubcatChange={handleSubcatChange}
+          dolarRate={dolarRate}
         />
 
         <div className="flex-1 min-w-0">
@@ -446,9 +446,9 @@ export default function StoreCatalog() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
                 {sorted.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
               </div>
-              <Pagination page={"{"}page{"}"} totalPages={"{"}totalPages{"}"} onChange={"{"}setPage{"}"} />
+              <Pagination page={page} totalPages={totalPages} onChange={setPage} />
               <p className="text-center text-xs text-gray-400 mt-3">
-                Mostrando {"{"}(page * PAGE_SIZE + 1).toLocaleString('es-AR'){"}"} – {"{"}Math.min((page + 1) * PAGE_SIZE, total).toLocaleString('es-AR'){"}"} de {"{"}total.toLocaleString('es-AR'){"}"} productos
+                Mostrando {(page * PAGE_SIZE + 1).toLocaleString('es-AR')} – {Math.min((page + 1) * PAGE_SIZE, total).toLocaleString('es-AR')} de {total.toLocaleString('es-AR')} productos
               </p>
             </>
           ) : (
@@ -466,13 +466,13 @@ export default function StoreCatalog() {
       </div>
 
       <MobileFilters
-        categories={"{"}categories{"}"}
-        categoryTree={"{"}categoryTree{"}"}
-        activeCategory={"{"}activeCategory{"}"}
-        activeSubcat={"{"}activeSubcat{"}"}
-        onCategoryChange={"{"}handleCategoryChange{"}"}
-        onSubcatChange={"{"}handleSubcatChange{"}"}
-        open={"{"}mobileOpen{"}"}
+        categories={categories}
+        categoryTree={categoryTree}
+        activeCategory={activeCategory}
+        activeSubcat={activeSubcat}
+        onCategoryChange={handleCategoryChange}
+        onSubcatChange={handleSubcatChange}
+        open={mobileOpen}
         onClose={() => setMobileOpen(false)}
       />
     </div>
