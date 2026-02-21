@@ -13,6 +13,44 @@ function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
 const CATEGORY_TABLE = 'dbo.tovaltech_categories';
 
+// ── Cache en memoria para markup global + por categoría ──────────────────────
+// Esto elimina 2 de los 4 viajes a SQL por request.
+// TTL: 2 minutos — si Valentín cambia el markup en admin, tarda máx 2 min en verse.
+// El admin puede forzar el refresco pasando ?bust_cache=1.
+let _markupCache     = null;
+let _markupCacheTime = 0;
+const MARKUP_TTL = 2 * 60 * 1000;
+
+async function getMarkupSettings(pool, forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && _markupCache && (now - _markupCacheTime) < MARKUP_TTL) {
+    return _markupCache;
+  }
+
+  // Un solo query con UNION ALL para traer global + por categoría en 1 viaje
+  const [settingsRes, catRes] = await Promise.all([
+    pool.request().query(`SELECT value FROM dbo.tovaltech_settings WHERE key_name = 'global_markup_pct'`),
+    pool.request().query(`SELECT name, markup_pct FROM ${CATEGORY_TABLE} WHERE markup_pct IS NOT NULL`),
+  ]);
+
+  const globalMarkupPct = parseFloat(settingsRes.recordset?.[0]?.value ?? '0');
+  const categoryMarkup  = {};
+  for (const row of catRes.recordset || []) {
+    const key = String(row.name ?? '').trim();
+    const pct = parseFloat(row.markup_pct);
+    if (key && Number.isFinite(pct)) categoryMarkup[key] = pct / 100;
+  }
+
+  _markupCache     = { globalMarkup: globalMarkupPct / 100, categoryMarkup };
+  _markupCacheTime = now;
+  return _markupCache;
+}
+
+// Llamado desde api/settings cuando se guarda un nuevo markup
+function invalidateMarkupCache() {
+  _markupCache = null;
+}
+
 module.exports = async function (context, req) {
   try {
     const pool = await connectDB();
@@ -29,25 +67,9 @@ module.exports = async function (context, req) {
     const limit     = clamp(toInt(req.query.limit, 24), 1, 500);
     const offset    = Math.max(0, toInt(req.query.offset, 0));
 
-    // ── Markup global ──────────────────────────────────────────────────────
-    const settingsRes = await pool.request().query(`
-      SELECT value FROM dbo.tovaltech_settings WHERE key_name = 'global_markup_pct'
-    `);
-    const globalMarkupPct = parseFloat(settingsRes.recordset?.[0]?.value ?? '0');
-    const globalMarkup    = globalMarkupPct / 100;
-
-    // ── Markup por categoría ───────────────────────────────────────────────
-    const categoryMarkup = {};
-    try {
-      const catRes = await pool.request().query(`
-        SELECT name, markup_pct FROM ${CATEGORY_TABLE} WHERE markup_pct IS NOT NULL
-      `);
-      for (const row of catRes.recordset || []) {
-        const key = String(row.name ?? '').trim();
-        const pct = parseFloat(row.markup_pct);
-        if (key && Number.isFinite(pct)) categoryMarkup[key] = pct / 100;
-      }
-    } catch (e) { context.log.warn('category_markup_fetch_failed', e.message); }
+    // ── Markup (cacheado en memoria, se refresca cada 2 min) ─────────────
+    const forceRefresh = req.query.bust_cache === '1' && isAdmin;
+    const { globalMarkup, categoryMarkup } = await getMarkupSettings(pool, forceRefresh);
 
     // ── Filtros WHERE ──────────────────────────────────────────────────────
     // Tienda: solo productos con stock > 0 Y active = 1
@@ -66,18 +88,9 @@ module.exports = async function (context, req) {
     if (buscar)    where.push('(name LIKE @buscar OR brand LIKE @buscar OR sku LIKE @buscar OR category LIKE @buscar)');
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-    // ── Count ──────────────────────────────────────────────────────────────
-    const countReq = pool.request();
-    if (categoria) countReq.input('categoria', categoria);
-    hijos.forEach((h, i) => countReq.input(`hijo${i}`, h));
-    if (subcateg)  countReq.input('subcategoria', subcateg);
-    if (marca)     countReq.input('marca',        marca);
-    if (proveedor) countReq.input('proveedor',    proveedor);
-    if (buscar)    countReq.input('buscar',       `%${buscar}%`);
-    const count = await countReq.query(`SELECT COUNT(1) AS total FROM dbo.tovaltech_products ${whereSql}`);
-    const total = count.recordset?.[0]?.total ?? 0;
-
-    // ── Items ──────────────────────────────────────────────────────────────
+    // ── Count + Items en UN SOLO viaje a SQL ────────────────────────────────
+    // COUNT(*) OVER() devuelve el total en cada fila sin una query separada.
+    // Esto elimina 1 round-trip por request (de 4 viajes a 2, con el cache arriba = 1).
     const itemsReq = pool.request();
     if (categoria) itemsReq.input('categoria', categoria);
     hijos.forEach((h, i) => itemsReq.input(`hijo${i}`, h));
@@ -89,13 +102,17 @@ module.exports = async function (context, req) {
     itemsReq.input('limit',  limit);
 
     const items = await itemsReq.query(`
-      SELECT * FROM dbo.tovaltech_products ${whereSql}
+      SELECT *,
+        COUNT(*) OVER() AS _total_count
+      FROM dbo.tovaltech_products ${whereSql}
       ORDER BY featured DESC, updated_at DESC, id DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 
+    const total = items.recordset?.[0]?._total_count ?? 0;
+
     // ── Aplicar markup — producto > categoría > global ─────────────────────
-    const products = (items.recordset || []).map(p => {
+    const products = (items.recordset || []).map(({ _total_count, ...p }) => {
       const catKey = String(p.category ?? '').trim();
       let effectiveMarkup, markupSource;
 
