@@ -60,12 +60,17 @@ function ProductCard({ product, priority = false }) {
             />
           </>
         ) : (
-          <span className="text-6xl select-none">{product.emoji ?? '📦'}</span>
+          <div className="flex flex-col items-center justify-center gap-2 text-gray-300">
+            <svg viewBox="0 0 24 24" className="w-16 h-16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9"/>
+            </svg>
+            <span className="text-xs text-gray-300">Sin imagen</span>
+          </div>
         )}
 
         {product.featured && (
           <span className="absolute top-2 left-2 text-[10px] bg-yellow-400 text-yellow-900 font-bold px-2 py-0.5 rounded-full shadow-sm">
-            ⭐ Destacado
+            ★ Destacado
           </span>
         )}
       </div>
@@ -115,10 +120,10 @@ function ProductCard({ product, priority = false }) {
 
         {/* Stock bajo */}
         {product.stock > 0 && product.stock <= 5 && (
-          <p className="text-[11px] text-orange-500 mt-1.5">⚠️ Solo {product.stock} unidad{product.stock !== 1 ? 'es' : ''}</p>
+          <p className="text-[11px] text-orange-500 mt-1.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block"></span>Solo {product.stock} unidad{product.stock !== 1 ? 'es' : ''} disponible{product.stock !== 1 ? 's' : ''}</p>
         )}
         {product.stock === 0 && (
-          <p className="text-[11px] text-red-500 mt-1.5">❌ Sin stock</p>
+          <p className="text-[11px] text-red-500 mt-1.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"></span>Sin stock</p>
         )}
       </div>
     </Link>

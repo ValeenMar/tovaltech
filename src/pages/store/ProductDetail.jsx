@@ -283,7 +283,7 @@ export default function ProductDetail() {
           {/* Garantía */}
           {product.warranty && product.warranty !== '-' && product.warranty !== '9999' && (
             <div className="flex items-center gap-2 bg-green-50 border border-green-100 rounded-xl px-4 py-2.5 mb-4 text-sm text-green-700">
-              🛡️ <span>Garantía: <strong>{product.warranty}</strong></span>
+              <span>🛡 Garantía: <strong>{product.warranty}</strong></span>
             </div>
           )}
 
@@ -303,13 +303,20 @@ export default function ProductDetail() {
           {/* Stock */}
           <div className="mb-5">
             {!inStock ? (
-              <span className="text-sm text-red-500 font-medium">❌ Sin stock disponible</span>
+              <span className="inline-flex items-center gap-2 text-sm text-red-600 font-medium bg-red-50 px-3 py-1.5 rounded-lg">
+                <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                Sin stock disponible
+              </span>
             ) : product.stock <= 5 ? (
-              <span className="text-sm text-orange-500 font-medium">
-                ⚠️ Solo {product.stock} unidad{product.stock !== 1 ? 'es' : ''} disponible{product.stock !== 1 ? 's' : ''}
+              <span className="inline-flex items-center gap-2 text-sm text-orange-600 font-medium bg-orange-50 px-3 py-1.5 rounded-lg">
+                <span className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
+                Solo {product.stock} unidad{product.stock !== 1 ? 'es' : ''} disponible{product.stock !== 1 ? 's' : ''}
               </span>
             ) : (
-              <span className="text-sm text-green-600 font-medium">✅ En stock</span>
+              <span className="inline-flex items-center gap-2 text-sm text-green-700 font-medium bg-green-50 px-3 py-1.5 rounded-lg">
+                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                En stock
+              </span>
             )}
           </div>
 

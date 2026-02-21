@@ -6,11 +6,34 @@ import HeroSection from '../../components/store/HeroSection'
 import ProductCard from '../../components/store/ProductCard'
 import { useProducts } from '../../hooks/useProducts'
 
+// SVG icons para los beneficios
+const TruckIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>
+  </svg>
+)
+const ShieldIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+  </svg>
+)
+const SyncIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+  </svg>
+)
+const HeadphonesIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/>
+  </svg>
+)
+
 const FEATURES = [
-  { icon: '🚚', title: 'Envío Gratis',   desc: 'En compras mayores a $50.000' },
-  { icon: '🔒', title: 'Pago Seguro',    desc: 'Transacciones protegidas' },
-  { icon: '🔄', title: 'Devoluciones',   desc: '30 días para devolver' },
-  { icon: '💬', title: 'Soporte 24/7',   desc: 'Siempre disponibles' },
+  { Icon: TruckIcon,      color: 'bg-blue-100 text-blue-600',   title: 'Envío a todo el país', desc: 'Despacho rápido desde Buenos Aires' },
+  { Icon: ShieldIcon,     color: 'bg-green-100 text-green-600', title: 'Pago 100% seguro',     desc: 'MercadoPago o transferencia bancaria' },
+  { Icon: SyncIcon,       color: 'bg-purple-100 text-purple-600', title: 'Stock actualizado',  desc: 'Precios y stock en tiempo real' },
+  { Icon: HeadphonesIcon, color: 'bg-orange-100 text-orange-600', title: 'Atención por WhatsApp', desc: 'Respondemos todas tus consultas' },
 ]
 
 // Extrae el video ID de cualquier formato de URL de YouTube
@@ -105,14 +128,16 @@ export default function Home() {
 
       {/* ── Beneficios ───────────────────────────────────────────────── */}
       <section className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {FEATURES.map((f, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <span className="text-3xl">{f.icon}</span>
+              <div key={i} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${f.color}`}>
+                  <f.Icon />
+                </div>
                 <div>
-                  <p className="font-semibold text-gray-800 text-sm">{f.title}</p>
-                  <p className="text-xs text-gray-500">{f.desc}</p>
+                  <p className="font-semibold text-gray-800 text-sm leading-tight">{f.title}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{f.desc}</p>
                 </div>
               </div>
             ))}
