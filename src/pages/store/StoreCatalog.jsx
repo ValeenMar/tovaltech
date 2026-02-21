@@ -75,7 +75,7 @@ function ParentCategoryItem({ cat, activeCategory, onCategoryChange, onSubcatCha
               {cat.product_count > 999 ? `${Math.floor(cat.product_count/1000)}k` : cat.product_count}
             </span>
           )}
-          {hasChildren && <ChevronIcon open={open || shouldBeOpen} />}
+          {hasChildren && <ChevronIcon open={open} />}
         </div>
       </button>
 
