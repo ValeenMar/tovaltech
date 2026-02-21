@@ -7,7 +7,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["get"],
-      "route": "products/meta"
+      "route": "products-meta"
     },
     { "type": "http", "direction": "out", "name": "res" }
   ]

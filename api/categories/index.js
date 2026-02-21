@@ -106,20 +106,6 @@ async function createCategory(pool, { name, markup_pct, parent_id }) {
   };
 }
 
-  const row = result.recordset[0];
-  return {
-    status: 201,
-    body: {
-      success: true,
-      category: {
-        id:            row.id,
-        name:          row.name,
-        markup_pct:    row.markup_pct !== null ? parseFloat(row.markup_pct) : null,
-        product_count: 0,
-        created_at:    row.created_at,
-      },
-    },
-  };
 
 // ── UPDATE ────────────────────────────────────────────────────────────────────
 
