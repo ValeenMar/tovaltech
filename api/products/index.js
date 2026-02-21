@@ -153,7 +153,7 @@ module.exports = async function (context, req) {
     context.res = {
       status: 200,
       headers: { 'content-type': 'application/json' },
-      body: { items: products, total, limit, offset, global_markup_pct: globalMarkupPct },
+      body: { items: products, total, limit, offset, global_markup_pct: Math.round(globalMarkup * 100) },
     };
 
   } catch (err) {
