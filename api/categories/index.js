@@ -23,19 +23,21 @@ async function getCategories(pool) {
       c.id,
       c.name,
       c.markup_pct,
+      c.parent_id,
       c.created_at,
       c.updated_at,
       COUNT(p.id) AS product_count
     FROM dbo.tovaltech_categories c
     LEFT JOIN dbo.tovaltech_products p ON p.category = c.name
-    GROUP BY c.id, c.name, c.markup_pct, c.created_at, c.updated_at
-    ORDER BY c.name ASC;
+    GROUP BY c.id, c.name, c.markup_pct, c.parent_id, c.created_at, c.updated_at
+    ORDER BY c.parent_id ASC, c.name ASC;
   `);
 
   return result.recordset.map(r => ({
     id:            r.id,
     name:          r.name,
     markup_pct:    r.markup_pct !== null ? parseFloat(r.markup_pct) : null,
+    parent_id:     r.parent_id ?? null,
     product_count: r.product_count ?? 0,
     created_at:    r.created_at,
     updated_at:    r.updated_at,
@@ -44,7 +46,7 @@ async function getCategories(pool) {
 
 // ── CREATE ────────────────────────────────────────────────────────────────────
 
-async function createCategory(pool, { name, markup_pct }) {
+async function createCategory(pool, { name, markup_pct, parent_id }) {
   if (!name || !String(name).trim()) {
     return { status: 400, body: { error: 'El nombre es requerido.' } };
   }
@@ -53,9 +55,19 @@ async function createCategory(pool, { name, markup_pct }) {
   const cleanMarkup = markup_pct !== undefined && markup_pct !== null && markup_pct !== ''
     ? parseFloat(markup_pct)
     : null;
+  const cleanParent = parent_id ? parseInt(parent_id, 10) : null;
 
   if (cleanMarkup !== null && (!Number.isFinite(cleanMarkup) || cleanMarkup < 0 || cleanMarkup > 500)) {
     return { status: 400, body: { error: 'markup_pct debe estar entre 0 y 500.' } };
+  }
+
+  if (cleanParent !== null) {
+    const parentExists = await pool.request()
+      .input('pid', cleanParent)
+      .query(`SELECT id FROM dbo.tovaltech_categories WHERE id = @pid AND parent_id IS NULL`);
+    if (!parentExists.recordset.length) {
+      return { status: 400, body: { error: 'La categoría padre no existe o es una subcategoría.' } };
+    }
   }
 
   // Verificar unicidad
@@ -70,11 +82,29 @@ async function createCategory(pool, { name, markup_pct }) {
   const result = await pool.request()
     .input('name',       cleanName)
     .input('markup_pct', cleanMarkup)
+    .input('parent_id',  cleanParent)
     .query(`
-      INSERT INTO dbo.tovaltech_categories (name, markup_pct)
-      OUTPUT INSERTED.id, INSERTED.name, INSERTED.markup_pct, INSERTED.created_at
-      VALUES (@name, @markup_pct);
+      INSERT INTO dbo.tovaltech_categories (name, markup_pct, parent_id)
+      OUTPUT INSERTED.id, INSERTED.name, INSERTED.markup_pct, INSERTED.parent_id, INSERTED.created_at
+      VALUES (@name, @markup_pct, @parent_id);
     `);
+
+  const row = result.recordset[0];
+  return {
+    status: 201,
+    body: {
+      success: true,
+      category: {
+        id:            row.id,
+        name:          row.name,
+        markup_pct:    row.markup_pct !== null ? parseFloat(row.markup_pct) : null,
+        parent_id:     row.parent_id ?? null,
+        product_count: 0,
+        created_at:    row.created_at,
+      },
+    },
+  };
+}
 
   const row = result.recordset[0];
   return {
@@ -94,10 +124,13 @@ async function createCategory(pool, { name, markup_pct }) {
 
 // ── UPDATE ────────────────────────────────────────────────────────────────────
 
-async function updateCategory(pool, { id, name, markup_pct }) {
+async function updateCategory(pool, { id, name, markup_pct, parent_id }) {
   if (!id) return { status: 400, body: { error: 'id requerido.' } };
 
-  const numId = parseInt(id, 10);
+  const numId     = parseInt(id, 10);
+  const newParent = parent_id === undefined ? undefined
+    : parent_id === null || parent_id === '' ? null
+    : parseInt(parent_id, 10);
 
   // Verificar que existe
   const existing = await pool.request()
@@ -142,17 +175,25 @@ async function updateCategory(pool, { id, name, markup_pct }) {
       .query(`UPDATE dbo.tovaltech_products SET category = @newName WHERE category = @oldName`);
   }
 
-  await pool.request()
+  // Construir SET dinámico
+  const setFields = ['name = @name', 'markup_pct = @markup_pct', 'updated_at = GETDATE()'];
+  const updateReq = pool.request()
     .input('id',         numId)
     .input('name',       newName)
-    .input('markup_pct', newMarkup)
-    .query(`
-      UPDATE dbo.tovaltech_categories
-      SET name = @name, markup_pct = @markup_pct, updated_at = GETDATE()
-      WHERE id = @id
-    `);
+    .input('markup_pct', newMarkup);
 
-  return { status: 200, body: { success: true, id: numId, name: newName, markup_pct: newMarkup } };
+  if (newParent !== undefined) {
+    setFields.push('parent_id = @parent_id');
+    updateReq.input('parent_id', newParent);
+  }
+
+  await updateReq.query(`
+    UPDATE dbo.tovaltech_categories
+    SET ${setFields.join(', ')}
+    WHERE id = @id
+  `);
+
+  return { status: 200, body: { success: true, id: numId, name: newName, markup_pct: newMarkup, parent_id: newParent ?? null } };
 }
 
 // ── DELETE ────────────────────────────────────────────────────────────────────

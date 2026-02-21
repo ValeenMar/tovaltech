@@ -1,3 +1,8 @@
+// src/pages/store/StoreCatalog.jsx
+// Catálogo con subcategorías como chips de filtro debajo del sidebar.
+// Cuando seleccionás una categoría padre, aparecen chips de subcategorías
+// (definidas en admin) para filtrar más fino.
+
 import { useState, useMemo, useCallback, memo } from 'react';
 import { useSEO } from '../../hooks/useSEO';
 import ProductCard from '../../components/store/ProductCard';
@@ -14,15 +19,31 @@ const SORT_OPTIONS = [
 const PAGE_SIZE = 32;
 
 // ── Sidebar de filtros ────────────────────────────────────────────────────────
-const FilterSidebar = memo(({ categories, activeCategory, onChange, dolarRate }) => {
+const FilterSidebar = memo(({ categories, categoryTree, subcategoryMap, activeCategory, activeSubcat, onCategoryChange, onSubcatChange, dolarRate }) => {
   const [expanded, setExpanded] = useState(false);
-  const visible = expanded ? categories : categories.slice(0, 14);
+  const VISIBLE_LIMIT = 12;
+  const cats    = categories.filter(c => c !== 'Todos');
+  const visible = expanded ? cats : cats.slice(0, VISIBLE_LIMIT);
+
+  // Subcategorías disponibles para la categoría activa
+  const subcats = activeCategory !== 'Todos'
+    ? (subcategoryMap[activeCategory] || [])
+    : [];
+
+  // También mostrar subcategorías hijas del árbol para la categoría activa
+  const treeChildren = useMemo(() => {
+    if (activeCategory === 'Todos') return [];
+    const parent = categoryTree.find(c => c.name === activeCategory);
+    return parent?.children?.map(c => c.name) ?? [];
+  }, [activeCategory, categoryTree]);
+
+  const allSubcats = [...new Set([...subcats, ...treeChildren])].sort();
 
   return (
-    <aside className="w-52 flex-shrink-0 hidden lg:block self-start sticky top-4">
+    <aside className="w-52 flex-shrink-0 hidden lg:block self-start sticky top-4 space-y-3">
       {/* Tipo de cambio */}
       {dolarRate && (
-        <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 mb-3">
+        <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
           <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider mb-1">Tipo de cambio</p>
           <p className="font-bold text-gray-800 text-sm">1 USD = ${dolarRate.toLocaleString('es-AR')} ARS</p>
           <p className="text-[11px] text-gray-400">Dólar oficial</p>
@@ -35,38 +56,81 @@ const FilterSidebar = memo(({ categories, activeCategory, onChange, dolarRate })
           <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Categorías</h3>
         </div>
         <div className="py-2">
+          {/* Todos */}
+          <button
+            onClick={() => { onCategoryChange('Todos'); onSubcatChange(null); }}
+            className={`w-full text-left px-4 py-2 text-sm transition-all
+              ${activeCategory === 'Todos'
+                ? 'bg-blue-600 text-white font-medium'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+          >
+            🗂️ <span className="ml-1">Todos</span>
+          </button>
+
+          {/* Categorías padre */}
           {visible.map(cat => (
             <button
               key={cat}
-              onClick={() => onChange(cat)}
+              onClick={() => { onCategoryChange(cat); onSubcatChange(null); }}
               className={`w-full text-left px-4 py-2 text-sm transition-all capitalize
                 ${activeCategory === cat
                   ? 'bg-blue-600 text-white font-medium'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
             >
-              {cat === 'Todos'
-                ? <span>🗂️ <span className="ml-1">Todos</span></span>
-                : cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()}
+              {cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()}
             </button>
           ))}
-          {categories.length > 14 && (
+
+          {cats.length > VISIBLE_LIMIT && (
             <button
               onClick={() => setExpanded(e => !e)}
               className="w-full text-left px-4 py-2 text-xs text-blue-500 hover:text-blue-700 font-medium border-t border-gray-50 mt-1"
             >
-              {expanded ? '↑ Ver menos' : `+ ${categories.length - 14} más`}
+              {expanded ? '↑ Ver menos' : `+ ${cats.length - VISIBLE_LIMIT} más`}
             </button>
           )}
         </div>
       </div>
+
+      {/* Subcategorías — aparecen cuando se elige una categoría padre */}
+      {allSubcats.length > 0 && (
+        <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-50">
+            <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Subcategorías</h3>
+          </div>
+          <div className="py-2">
+            {allSubcats.map(sub => (
+              <button
+                key={sub}
+                onClick={() => onSubcatChange(activeSubcat === sub ? null : sub)}
+                className={`w-full text-left px-4 py-2 text-sm transition-all
+                  ${activeSubcat === sub
+                    ? 'bg-blue-100 text-blue-700 font-medium'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              >
+                <span className="mr-1.5 text-gray-300">└</span>
+                {sub}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </aside>
   );
 });
 FilterSidebar.displayName = 'FilterSidebar';
 
 // ── Filtros móvil (drawer) ────────────────────────────────────────────────────
-const MobileFilters = memo(({ categories, activeCategory, onChange, open, onClose }) => {
+const MobileFilters = memo(({ categories, categoryTree, subcategoryMap, activeCategory, activeSubcat, onCategoryChange, onSubcatChange, open, onClose }) => {
   if (!open) return null;
+
+  const subcats = activeCategory !== 'Todos'
+    ? [...new Set([
+        ...(subcategoryMap[activeCategory] || []),
+        ...(categoryTree.find(c => c.name === activeCategory)?.children?.map(c => c.name) ?? [])
+      ])].sort()
+    : [];
+
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -76,18 +140,41 @@ const MobileFilters = memo(({ categories, activeCategory, onChange, open, onClos
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
-          {categories.map(cat => (
+          <button
+            onClick={() => { onCategoryChange('Todos'); onSubcatChange(null); onClose(); }}
+            className={`w-full text-left px-5 py-3 text-sm transition-all
+              ${activeCategory === 'Todos' ? 'bg-blue-600 text-white font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+          >
+            🗂️ Todos
+          </button>
+          {categories.filter(c => c !== 'Todos').map(cat => (
             <button
               key={cat}
-              onClick={() => { onChange(cat); onClose(); }}
+              onClick={() => { onCategoryChange(cat); onSubcatChange(null); onClose(); }}
               className={`w-full text-left px-5 py-3 text-sm capitalize transition-all
-                ${activeCategory === cat
-                  ? 'bg-blue-600 text-white font-medium'
-                  : 'text-gray-600 hover:bg-gray-50'}`}
+                ${activeCategory === cat ? 'bg-blue-600 text-white font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
             >
-              {cat === 'Todos' ? '🗂️ Todos' : cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()}
+              {cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()}
             </button>
           ))}
+
+          {subcats.length > 0 && (
+            <>
+              <div className="px-5 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-t mt-1">
+                Subcategorías
+              </div>
+              {subcats.map(sub => (
+                <button
+                  key={sub}
+                  onClick={() => { onSubcatChange(activeSubcat === sub ? null : sub); onClose(); }}
+                  className={`w-full text-left px-6 py-2.5 text-sm transition-all
+                    ${activeSubcat === sub ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500 hover:bg-gray-50'}`}
+                >
+                  └ {sub}
+                </button>
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -151,21 +238,28 @@ const SkeletonGrid = () => (
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function StoreCatalog() {
   const [activeCategory, setActiveCategory] = useState('Todos');
-  const [searchTerm, setSearchTerm]         = useState('');
-  const [inputValue, setInputValue]         = useState('');
-  const [sortBy, setSortBy]                 = useState('default');
-  const [page, setPage]                     = useState(0);
-  const [mobileOpen, setMobileOpen]         = useState(false);
+  const [activeSubcat,   setActiveSubcat]   = useState(null);
+  const [searchTerm,     setSearchTerm]     = useState('');
+  const [inputValue,     setInputValue]     = useState('');
+  const [sortBy,         setSortBy]         = useState('default');
+  const [page,           setPage]           = useState(0);
+  const [mobileOpen,     setMobileOpen]     = useState(false);
 
-  const { categories } = useProductsMeta();
-  useSEO({ title: activeCategory !== "Todos" ? activeCategory : "Catálogo de Productos", description: "Explorá nuestro catálogo completo de tecnología y computación. Filtros por categoría, ordenamiento por precio y búsqueda instantánea." });
+  const { categories, categoryTree, subcategoryMap } = useProductsMeta();
+  useSEO({
+    title: activeCategory !== 'Todos'
+      ? (activeSubcat ? `${activeSubcat} — ${activeCategory}` : activeCategory)
+      : 'Catálogo de Productos',
+    description: 'Explorá nuestro catálogo completo de tecnología y computación.',
+  });
 
   const filters = useMemo(() => ({
-    categoria: activeCategory !== 'Todos' ? activeCategory : '',
-    buscar:    searchTerm,
-    limit:     PAGE_SIZE,
-    offset:    page * PAGE_SIZE,
-  }), [activeCategory, searchTerm, page]);
+    categoria:    activeCategory !== 'Todos' ? activeCategory : '',
+    subcategoria: activeSubcat ?? '',
+    buscar:       searchTerm,
+    limit:        PAGE_SIZE,
+    offset:       page * PAGE_SIZE,
+  }), [activeCategory, activeSubcat, searchTerm, page]);
 
   const { products, total, loading } = useProducts(filters);
 
@@ -187,11 +281,18 @@ export default function StoreCatalog() {
 
   const handleCategoryChange = useCallback((cat) => {
     setActiveCategory(cat);
+    setActiveSubcat(null);
     setPage(0);
   }, []);
 
+  const handleSubcatChange = useCallback((sub) => {
+    setActiveSubcat(sub);
+    setPage(0);
+  }, []);
+
+  const activeFiltersCount = (activeCategory !== 'Todos' ? 1 : 0) + (activeSubcat ? 1 : 0);
+
   return (
-    /* Sin max-w fijo — usa todo el ancho con padding lateral */
     <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-6">
 
       {/* Header */}
@@ -204,18 +305,16 @@ export default function StoreCatalog() {
 
       {/* Barra superior */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-2.5 mb-5 flex gap-2 items-center">
-        {/* Botón filtros móvil */}
         <button
           onClick={() => setMobileOpen(true)}
           className="lg:hidden flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 flex-shrink-0"
         >
           ☰
-          {activeCategory !== 'Todos' && (
-            <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">1</span>
+          {activeFiltersCount > 0 && (
+            <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{activeFiltersCount}</span>
           )}
         </button>
 
-        {/* Búsqueda — fix warning: agregamos id y name */}
         <input
           id="catalog-search"
           name="catalog-search"
@@ -229,7 +328,6 @@ export default function StoreCatalog() {
                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
 
-        {/* Ordenar */}
         <select
           id="catalog-sort"
           name="catalog-sort"
@@ -241,15 +339,25 @@ export default function StoreCatalog() {
           {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
 
-        {/* Chip categoría activa */}
+        {/* Chips de filtros activos */}
         {activeCategory !== 'Todos' && (
           <button
-            onClick={() => handleCategoryChange('Todos')}
+            onClick={() => { handleCategoryChange('Todos'); }}
             className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200
                        text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 flex-shrink-0 whitespace-nowrap"
           >
-            <span className="capitalize max-w-[120px] truncate">{activeCategory.toLowerCase()}</span>
+            <span className="capitalize max-w-[100px] truncate">{activeCategory.toLowerCase()}</span>
             <span className="text-blue-400">✕</span>
+          </button>
+        )}
+        {activeSubcat && (
+          <button
+            onClick={() => handleSubcatChange(null)}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-indigo-50 border border-indigo-200
+                       text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 flex-shrink-0 whitespace-nowrap"
+          >
+            <span className="max-w-[100px] truncate">{activeSubcat}</span>
+            <span className="text-indigo-400">✕</span>
           </button>
         )}
       </div>
@@ -257,11 +365,14 @@ export default function StoreCatalog() {
       {/* Layout: sidebar + grid */}
       <div className="flex gap-5">
 
-        {/* Sidebar desktop */}
         <FilterSidebar
           categories={categories}
+          categoryTree={categoryTree}
+          subcategoryMap={subcategoryMap}
           activeCategory={activeCategory}
-          onChange={handleCategoryChange}
+          activeSubcat={activeSubcat}
+          onCategoryChange={handleCategoryChange}
+          onSubcatChange={handleSubcatChange}
           dolarRate={dolarRate}
         />
 
@@ -299,11 +410,14 @@ export default function StoreCatalog() {
         </div>
       </div>
 
-      {/* Filtros móvil drawer */}
       <MobileFilters
         categories={categories}
+        categoryTree={categoryTree}
+        subcategoryMap={subcategoryMap}
         activeCategory={activeCategory}
-        onChange={handleCategoryChange}
+        activeSubcat={activeSubcat}
+        onCategoryChange={handleCategoryChange}
+        onSubcatChange={handleSubcatChange}
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
       />

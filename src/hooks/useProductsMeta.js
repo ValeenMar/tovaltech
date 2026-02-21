@@ -1,15 +1,15 @@
-import { useState, useEffect } from 'react';
-import { CATEGORIES } from '../data/products';
+// src/hooks/useProductsMeta.js
+// Obtiene categorías (con árbol padre/hijo), subcategorías, marcas y proveedores.
 
-/**
- * useProductsMeta — obtiene categorías, marcas y proveedores desde la API.
- * Fallback a las categorías hardcodeadas si la API no responde.
- */
+import { useState, useEffect } from 'react';
+
 export function useProductsMeta() {
-  const [categories, setCategories] = useState(CATEGORIES);
-  const [brands, setBrands]         = useState([]);
-  const [providers, setProviders]   = useState([]);
-  const [loading, setLoading]       = useState(true);
+  const [categories,    setCategories]    = useState([]);
+  const [categoryTree,  setCategoryTree]  = useState([]);
+  const [subcategoryMap, setSubcategoryMap] = useState({});
+  const [brands,        setBrands]        = useState([]);
+  const [providers,     setProviders]     = useState([]);
+  const [loading,       setLoading]       = useState(true);
 
   useEffect(() => {
     fetch('/api/products-meta')
@@ -18,15 +18,18 @@ export function useProductsMeta() {
         if (data.categories?.length) {
           setCategories(['Todos', ...data.categories]);
         }
+        if (data.categoryTree?.length) {
+          setCategoryTree(data.categoryTree);
+        }
+        if (data.subcategoryMap) {
+          setSubcategoryMap(data.subcategoryMap);
+        }
         setBrands(data.brands ?? []);
         setProviders(data.providers ?? []);
         setLoading(false);
       })
-      .catch(() => {
-        // Fallback: CATEGORIES del archivo local
-        setLoading(false);
-      });
+      .catch(() => setLoading(false));
   }, []);
 
-  return { categories, brands, providers, loading };
+  return { categories, categoryTree, subcategoryMap, brands, providers, loading };
 }

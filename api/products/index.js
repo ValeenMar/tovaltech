@@ -18,10 +18,11 @@ module.exports = async function (context, req) {
     const pool = await connectDB();
 
     const isAdmin   = req.query.admin === '1';
-    const categoria = (req.query.categoria || '').trim();
-    const marca     = (req.query.marca     || '').trim();
-    const proveedor = (req.query.proveedor || '').trim();
-    const buscar    = (req.query.buscar    || '').trim();
+    const categoria  = (req.query.categoria  || '').trim();
+    const subcateg   = (req.query.subcategoria || '').trim();
+    const marca      = (req.query.marca      || '').trim();
+    const proveedor  = (req.query.proveedor  || '').trim();
+    const buscar     = (req.query.buscar     || '').trim();
     const limit     = clamp(toInt(req.query.limit, 24), 1, 500);
     const offset    = Math.max(0, toInt(req.query.offset, 0));
 
@@ -50,6 +51,7 @@ module.exports = async function (context, req) {
     // Admin:  sin filtros de visibilidad (ve todo)
     const where = isAdmin ? [] : ['stock > 0', '(active IS NULL OR active = 1)'];
     if (categoria) where.push('category = @categoria');
+    if (subcateg)  where.push('subcategory = @subcategoria');
     if (marca)     where.push('brand = @marca');
     if (proveedor) where.push('provider = @proveedor');
     if (buscar)    where.push('(name LIKE @buscar OR brand LIKE @buscar OR sku LIKE @buscar OR category LIKE @buscar)');
@@ -57,19 +59,21 @@ module.exports = async function (context, req) {
 
     // ── Count ──────────────────────────────────────────────────────────────
     const countReq = pool.request();
-    if (categoria) countReq.input('categoria', categoria);
-    if (marca)     countReq.input('marca',     marca);
-    if (proveedor) countReq.input('proveedor', proveedor);
-    if (buscar)    countReq.input('buscar',    `%${buscar}%`);
+    if (categoria) countReq.input('categoria',    categoria);
+    if (subcateg)  countReq.input('subcategoria', subcateg);
+    if (marca)     countReq.input('marca',        marca);
+    if (proveedor) countReq.input('proveedor',    proveedor);
+    if (buscar)    countReq.input('buscar',       `%${buscar}%`);
     const count = await countReq.query(`SELECT COUNT(1) AS total FROM dbo.tovaltech_products ${whereSql}`);
     const total = count.recordset?.[0]?.total ?? 0;
 
     // ── Items ──────────────────────────────────────────────────────────────
     const itemsReq = pool.request();
-    if (categoria) itemsReq.input('categoria', categoria);
-    if (marca)     itemsReq.input('marca',     marca);
-    if (proveedor) itemsReq.input('proveedor', proveedor);
-    if (buscar)    itemsReq.input('buscar',    `%${buscar}%`);
+    if (categoria) itemsReq.input('categoria',    categoria);
+    if (subcateg)  itemsReq.input('subcategoria', subcateg);
+    if (marca)     itemsReq.input('marca',        marca);
+    if (proveedor) itemsReq.input('proveedor',    proveedor);
+    if (buscar)    itemsReq.input('buscar',       `%${buscar}%`);
     itemsReq.input('offset', offset);
     itemsReq.input('limit',  limit);
 
