@@ -1,24 +1,56 @@
 // src/components/store/ProductCard.jsx
-// Tarjeta de producto — ahora con link a la página de detalle
+// Tarjeta de producto con lazy loading real via IntersectionObserver.
+// Las imágenes se cargan SOLO cuando la card entra al viewport, no antes.
 
-import { memo, useState } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 
 const fmtARS = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
 
-const fmtUSD = (n) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n ?? 0);
+// ── Hook: carga la imagen solo cuando es visible en pantalla ──────────────────
+function useLazyImage(src, priority = false) {
+  const ref          = useRef(null);
+  const [ready, setReady]   = useState(priority);  // prioridad = cargar ya
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError]   = useState(false);
+
+  useEffect(() => {
+    if (priority) { setReady(true); return; }
+    if (!src) return;
+
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setReady(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px' }   // empieza a cargar 200px antes de ser visible
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [src, priority]);
+
+  return { ref, ready, loaded, error, setLoaded, setError };
+}
 
 function ProductCard({ product, priority = false }) {
   const { addToCart } = useCart();
-  const [imgError,  setImgError]  = useState(false);
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const [added,     setAdded]     = useState(false);
+  const [added, setAdded] = useState(false);
+
+  const { ref, ready, loaded, error, setLoaded, setError } = useLazyImage(
+    product.image_url,
+    priority
+  );
 
   const handleAdd = (e) => {
-    e.preventDefault(); // no navega al detalle al clickear el botón
+    e.preventDefault();
     addToCart({
       id:        product.id,
       name:      product.name,
@@ -32,7 +64,7 @@ function ProductCard({ product, priority = false }) {
     setTimeout(() => setAdded(false), 1800);
   };
 
-  const showImage = product.image_url && !imgError;
+  const showImage = product.image_url && !error;
 
   return (
     <Link
@@ -40,24 +72,30 @@ function ProductCard({ product, priority = false }) {
       className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-200 overflow-hidden group flex flex-col"
     >
       {/* Imagen */}
-      <div className="bg-white h-52 flex items-center justify-center overflow-hidden relative flex-shrink-0 border-b border-gray-100">
+      <div
+        ref={ref}
+        className="bg-white h-52 flex items-center justify-center overflow-hidden relative flex-shrink-0 border-b border-gray-100"
+      >
         {showImage ? (
           <>
-            {!imgLoaded && <div className="absolute inset-0 bg-gray-100 animate-pulse" />}
-            <img
-              src={product.image_url}
-              alt={product.name}
-              loading={priority ? 'eager' : 'lazy'}
-              fetchpriority={priority ? 'high' : 'auto'}
-              decoding="async"
-              width={240}
-              height={208}
-              onLoad={() => setImgLoaded(true)}
-              onError={() => setImgError(true)}
-              className={`max-h-full max-w-full w-auto h-auto object-contain p-3
-                group-hover:scale-105 transition-transform duration-300
-                ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
-            />
+            {/* Skeleton mientras no carga */}
+            {!loaded && <div className="absolute inset-0 bg-gray-100 animate-pulse" />}
+
+            {/* Solo pone el src cuando la card es visible */}
+            {ready && (
+              <img
+                src={product.image_url}
+                alt={product.name}
+                decoding="async"
+                width={240}
+                height={208}
+                onLoad={() => setLoaded(true)}
+                onError={() => setError(true)}
+                className={`max-h-full max-w-full w-auto h-auto object-contain p-3
+                  group-hover:scale-105 transition-transform duration-300
+                  ${loaded ? 'opacity-100' : 'opacity-0'}`}
+              />
+            )}
           </>
         ) : (
           <div className="flex flex-col items-center justify-center gap-2 text-gray-300">
@@ -119,10 +157,16 @@ function ProductCard({ product, priority = false }) {
 
         {/* Stock bajo */}
         {product.stock > 0 && product.stock <= 5 && (
-          <p className="text-[11px] text-orange-500 mt-1.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block"></span>Solo {product.stock} unidad{product.stock !== 1 ? 'es' : ''} disponible{product.stock !== 1 ? 's' : ''}</p>
+          <p className="text-[11px] text-orange-500 mt-1.5 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-orange-400 inline-block"></span>
+            Solo {product.stock} unidad{product.stock !== 1 ? 'es' : ''} disponible{product.stock !== 1 ? 's' : ''}
+          </p>
         )}
         {product.stock === 0 && (
-          <p className="text-[11px] text-red-500 mt-1.5 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"></span>Sin stock</p>
+          <p className="text-[11px] text-red-500 mt-1.5 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block"></span>
+            Sin stock
+          </p>
         )}
       </div>
     </Link>

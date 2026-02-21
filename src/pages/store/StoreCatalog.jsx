@@ -16,7 +16,7 @@ const SORT_OPTIONS = [
   { value: 'name',       label: 'Nombre A→Z' },
 ];
 
-const PAGE_SIZE = 32;
+const PAGE_SIZE = 20;
 
 function ChevronIcon({ open }) {
   return (
