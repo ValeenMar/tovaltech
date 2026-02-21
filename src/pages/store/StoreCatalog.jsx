@@ -419,6 +419,7 @@ export default function StoreCatalog() {
           )}
         </button>
 
+        <label htmlFor="catalog-search" className="sr-only">Buscar productos</label>
         <input id="catalog-search" name="catalog-search" type="text"
           placeholder="🔍 Buscar por nombre o marca..."
           value={inputValue}
@@ -461,7 +462,7 @@ export default function StoreCatalog() {
           ) : sorted.length > 0 ? (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-                {sorted.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
+                {sorted.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 8} />)}
               </div>
               <Pagination page={page} totalPages={totalPages} onChange={setPage} />
               <p className="text-center text-xs text-gray-400 mt-3">
