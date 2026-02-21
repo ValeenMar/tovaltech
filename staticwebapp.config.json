@@ -44,6 +44,15 @@
     {
       "route": "/api/categories*",
       "allowedRoles": ["admin"]
+    },
+    {
+      "route": "/api/banners",
+      "methods": ["POST"],
+      "allowedRoles": ["admin"]
+    },
+    {
+      "route": "/api/health*",
+      "allowedRoles": ["admin"]
     }
   ],
   "responseOverrides": {

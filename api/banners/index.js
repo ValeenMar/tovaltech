@@ -5,6 +5,32 @@
 const connectDB = require('../db');
 const headers = { 'content-type': 'application/json' };
 
+// ── Cache en memoria para el GET público de la tienda ─────────────────────────
+// Evita ir a SQL en cada carga del hero. TTL: 2 minutos.
+// El admin puede forzar refresco pasando ?admin=1.
+// Cualquier POST (create/update/delete/set_*) invalida el cache inmediatamente.
+let _bannersCache     = null;
+let _bannersCacheTime = 0;
+const BANNERS_TTL = 2 * 60 * 1000; // 2 minutos en ms
+
+function setCache(data) {
+  _bannersCache     = data;
+  _bannersCacheTime = Date.now();
+}
+
+function invalidateCache() {
+  _bannersCache = null;
+}
+
+function getCache() {
+  if (!_bannersCache) return null;
+  if (Date.now() - _bannersCacheTime > BANNERS_TTL) {
+    _bannersCache = null;
+    return null;
+  }
+  return _bannersCache;
+}
+
 module.exports = async function (context, req) {
   try {
     const pool = await connectDB();
@@ -12,6 +38,16 @@ module.exports = async function (context, req) {
     // ── GET ──────────────────────────────────────────────────────────────────
     if (req.method === 'GET') {
       const isAdmin = req.query.admin === '1';
+
+      // Servir desde cache si es una petición de la tienda y el cache es válido
+      if (!isAdmin) {
+        const cached = getCache();
+        if (cached) {
+          context.res = { status: 200, headers, body: cached };
+          return;
+        }
+      }
+
       const where   = isAdmin ? '' : 'WHERE active = 1';
       const result  = await pool.request().query(`
         SELECT id, image_url, title, subtitle, link_url, sort_order, active, created_at, updated_at

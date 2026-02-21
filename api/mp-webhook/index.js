@@ -2,19 +2,65 @@
  * api/mp-webhook/index.js
  *
  * Recibe notificaciones de pago de MercadoPago (IPN / Webhooks).
+ * Verifica la firma x-signature antes de procesar cualquier notificación.
  * Verifica el pago contra la API de MP y guarda el pedido en Azure SQL.
  *
  * Variables de entorno necesarias:
- *   MP_ACCESS_TOKEN  → Token de producción de MercadoPago
+ *   MP_ACCESS_TOKEN   → Token de producción de MercadoPago
+ *   MP_WEBHOOK_SECRET → Secret configurado en el panel de MP (Webhooks → secret)
  */
 
-const connectDB = require('../db');
+const connectDB  = require('../db');
+const crypto     = require('crypto');
 
 const MP_PAYMENTS_URL = 'https://api.mercadopago.com/v1/payments';
 
+// ── Verificación de firma HMAC-SHA256 ────────────────────────────────────────
+// MP envía en el header x-signature: ts=<timestamp>,v1=<hash>
+// El mensaje a firmar es: "id:<dataId>;request-id:<x-request-id>;ts:<ts>;"
+// Documentación: https://www.mercadopago.com.ar/developers/es/docs/your-integrations/notifications/webhooks
+function verifyMpSignature(req, dataId, secret) {
+  try {
+    const xSignature  = req.headers['x-signature']  || '';
+    const xRequestId  = req.headers['x-request-id'] || '';
+
+    if (!xSignature || !secret) return false;
+
+    // Parsear ts y v1 del header
+    const parts = Object.fromEntries(
+      xSignature.split(',').map(part => {
+        const [k, v] = part.split('=');
+        return [k.trim(), v?.trim()];
+      })
+    );
+
+    const ts = parts['ts'];
+    const v1 = parts['v1'];
+    if (!ts || !v1) return false;
+
+    // Construir el mensaje tal como lo especifica MP
+    const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+
+    // Calcular HMAC
+    const expected = crypto
+      .createHmac('sha256', secret)
+      .update(manifest)
+      .digest('hex');
+
+    // Comparación en tiempo constante para evitar timing attacks
+    return crypto.timingSafeEqual(
+      Buffer.from(v1,       'hex'),
+      Buffer.from(expected, 'hex')
+    );
+  } catch {
+    return false;
+  }
+}
+
 module.exports = async function (context, req) {
   const headers = { 'content-type': 'application/json' };
-  const token = process.env.MP_ACCESS_TOKEN;
+  const token   = process.env.MP_ACCESS_TOKEN;
+  const secret  = process.env.MP_WEBHOOK_SECRET; // puede ser undefined si no está configurado
 
   // ── MP envía un GET de validación al activar el webhook ──────────────────
   if (req.method === 'GET') {
@@ -33,6 +79,25 @@ module.exports = async function (context, req) {
   if (topic !== 'payment' || !dataId) {
     context.res = { status: 200, headers, body: { ignored: true } };
     return;
+  }
+
+  // ── Verificar firma si el secret está configurado ────────────────────────
+  // Si MP_WEBHOOK_SECRET no está en las env vars, se loguea un warning pero
+  // se sigue procesando (retrocompatibilidad con deployments sin el secret).
+  // Una vez que configures el secret en Azure, la validación se activa sola.
+  if (secret) {
+    const valid = verifyMpSignature(req, dataId, secret);
+    if (!valid) {
+      context.log.warn('mp_webhook_invalid_signature', { dataId });
+      // Respondemos 200 para que MP no reintente — si la firma no matchea
+      // es un request falso o un replay; no queremos procesarlo.
+      context.res = { status: 200, headers, body: { error: 'invalid_signature' } };
+      return;
+    }
+  } else {
+    context.log.warn('mp_webhook_no_secret', {
+      message: 'MP_WEBHOOK_SECRET no está configurado. Configuralo en Azure para habilitar la verificación de firma.',
+    });
   }
 
   try {
