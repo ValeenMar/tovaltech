@@ -20,6 +20,9 @@ module.exports = async function (context, req) {
     const isAdmin   = req.query.admin === '1';
     const categoria  = (req.query.categoria  || '').trim();
     const subcateg   = (req.query.subcategoria || '').trim();
+    // hijos: subcategorías del padre seleccionado (separadas por coma)
+    const hijosRaw   = (req.query.hijos || '').trim();
+    const hijos      = hijosRaw ? hijosRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
     const marca      = (req.query.marca      || '').trim();
     const proveedor  = (req.query.proveedor  || '').trim();
     const buscar     = (req.query.buscar     || '').trim();
@@ -50,7 +53,13 @@ module.exports = async function (context, req) {
     // Tienda: solo productos con stock > 0 Y active = 1
     // Admin:  sin filtros de visibilidad (ve todo)
     const where = isAdmin ? [] : ['stock > 0', '(active IS NULL OR active = 1)'];
-    if (categoria) where.push('category = @categoria');
+    // Si hay hijos (padre clickeado), filtrar por la categoría padre O cualquiera de sus hijos
+    if (hijos.length > 0) {
+      const inList = hijos.map((_, i) => `@hijo${i}`).join(', ');
+      where.push(`(category = @categoria OR category IN (${inList}))`);
+    } else if (categoria) {
+      where.push('category = @categoria');
+    }
     if (subcateg)  where.push('subcategory = @subcategoria');
     if (marca)     where.push('brand = @marca');
     if (proveedor) where.push('provider = @proveedor');
@@ -59,7 +68,8 @@ module.exports = async function (context, req) {
 
     // ── Count ──────────────────────────────────────────────────────────────
     const countReq = pool.request();
-    if (categoria) countReq.input('categoria',    categoria);
+    if (categoria) countReq.input('categoria', categoria);
+    hijos.forEach((h, i) => countReq.input(`hijo${i}`, h));
     if (subcateg)  countReq.input('subcategoria', subcateg);
     if (marca)     countReq.input('marca',        marca);
     if (proveedor) countReq.input('proveedor',    proveedor);
@@ -69,7 +79,8 @@ module.exports = async function (context, req) {
 
     // ── Items ──────────────────────────────────────────────────────────────
     const itemsReq = pool.request();
-    if (categoria) itemsReq.input('categoria',    categoria);
+    if (categoria) itemsReq.input('categoria', categoria);
+    hijos.forEach((h, i) => itemsReq.input(`hijo${i}`, h));
     if (subcateg)  itemsReq.input('subcategoria', subcateg);
     if (marca)     itemsReq.input('marca',        marca);
     if (proveedor) itemsReq.input('proveedor',    proveedor);

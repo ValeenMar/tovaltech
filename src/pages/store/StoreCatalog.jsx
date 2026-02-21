@@ -1,7 +1,7 @@
 // src/pages/store/StoreCatalog.jsx
-// Catálogo con subcategorías como chips de filtro debajo del sidebar.
-// Cuando seleccionás una categoría padre, aparecen chips de subcategorías
-// (definidas en admin) para filtrar más fino.
+// Catálogo con sidebar de categorías en árbol acordeón (padre → hijos expandibles).
+// Al clickear un padre se expande/colapsa y filtra por todos sus hijos.
+// Al clickear un hijo filtra solo ese hijo.
 
 import { useState, useMemo, useCallback, memo } from 'react';
 import { useSEO } from '../../hooks/useSEO';
@@ -18,118 +18,178 @@ const SORT_OPTIONS = [
 
 const PAGE_SIZE = 32;
 
-// ── Sidebar de filtros ────────────────────────────────────────────────────────
-const FilterSidebar = memo(({ categories, categoryTree, subcategoryMap, activeCategory, activeSubcat, onCategoryChange, onSubcatChange, dolarRate }) => {
-  const [expanded, setExpanded] = useState(false);
-  const VISIBLE_LIMIT = 12;
-  const cats    = categories.filter(c => c !== 'Todos');
-  const visible = expanded ? cats : cats.slice(0, VISIBLE_LIMIT);
+function ChevronIcon({ open }) {
+  return (
+    <svg
+      className={`w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}
+      viewBox="0 0 20 20" fill="currentColor"
+    >
+      <path fillRule="evenodd"
+        d="M7.293 4.707a1 1 0 011.414 0l5 5a1 1 0 010 1.414l-5 5a1 1 0 01-1.414-1.414L11.586 10 7.293 5.707a1 1 0 010-1.414z"
+        clipRule="evenodd" />
+    </svg>
+  );
+}
 
-  // Subcategorías disponibles para la categoría activa
-  const subcats = activeCategory !== 'Todos'
-    ? (subcategoryMap[activeCategory] || [])
-    : [];
+function ParentCategoryItem({ cat, activeCategory, onCategoryChange, onSubcatChange, children }) {
+  const isActive      = activeCategory === cat.name;
+  const hasChildren   = children && children.length > 0;
+  const childIsActive = hasChildren && children.some(c => activeCategory === c.name);
+  const [open, setOpen] = useState(isActive || childIsActive);
 
-  // También mostrar subcategorías hijas del árbol para la categoría activa
-  const treeChildren = useMemo(() => {
-    if (activeCategory === 'Todos') return [];
-    const parent = categoryTree.find(c => c.name === activeCategory);
-    return parent?.children?.map(c => c.name) ?? [];
-  }, [activeCategory, categoryTree]);
+  const shouldBeOpen = isActive || childIsActive;
 
-  const allSubcats = [...new Set([...subcats, ...treeChildren])].sort();
+  const handleClick = () => {
+    if (hasChildren) {
+      setOpen(o => !o);
+    }
+    onCategoryChange(cat.name);
+    onSubcatChange(null);
+  };
+
+  return (
+    <div>
+      <button
+        onClick={handleClick}
+        className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between gap-2 transition-all
+          ${isActive && !childIsActive
+            ? 'bg-blue-600 text-white font-semibold'
+            : childIsActive
+            ? 'bg-blue-50 text-blue-700 font-semibold'
+            : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'}`}
+      >
+        <span className="truncate">{cat.name}</span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {cat.product_count > 0 && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium
+              ${isActive && !childIsActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+              {cat.product_count > 999 ? `${Math.floor(cat.product_count/1000)}k` : cat.product_count}
+            </span>
+          )}
+          {hasChildren && <ChevronIcon open={open || shouldBeOpen} />}
+        </div>
+      </button>
+
+      {hasChildren && (open || shouldBeOpen) && (
+        <div className="border-l-2 border-blue-100 ml-4 mb-0.5">
+          {children.map(child => (
+            <button
+              key={child.id ?? child.name}
+              onClick={() => { onCategoryChange(child.name); onSubcatChange(null); }}
+              className={`w-full text-left pl-3 pr-4 py-2 text-[13px] flex items-center justify-between gap-2 transition-all
+                ${activeCategory === child.name
+                  ? 'text-blue-700 font-semibold bg-blue-50'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'}`}
+            >
+              <span className="truncate">{child.name}</span>
+              {child.product_count > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0
+                  ${activeCategory === child.name ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                  {child.product_count > 999 ? `${Math.floor(child.product_count/1000)}k` : child.product_count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const FilterSidebar = memo(({ categoryTree, categories, activeCategory, activeSubcat, onCategoryChange, onSubcatChange, dolarRate }) => {
+  const parentsWithChildren = categoryTree.filter(c => c.children?.length > 0);
+  const parentsAlone        = categoryTree.filter(c => !c.children?.length);
+  const allTreeNames = new Set([
+    ...categoryTree.map(c => c.name),
+    ...categoryTree.flatMap(c => c.children?.map(ch => ch.name) ?? []),
+  ]);
+  const orphans = categories.filter(c => c !== 'Todos' && !allTreeNames.has(c));
 
   return (
     <aside className="w-52 flex-shrink-0 hidden lg:block self-start sticky top-4 space-y-3">
-      {/* Tipo de cambio */}
       {dolarRate && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
           <p className="text-[10px] font-semibold text-blue-400 uppercase tracking-wider mb-1">Tipo de cambio</p>
-          <p className="font-bold text-gray-800 text-sm">1 USD = ${dolarRate.toLocaleString('es-AR')} ARS</p>
+          <p className="font-bold text-gray-800 text-sm">1 USD = ${"{"}dolarRate.toLocaleString('es-AR'){"}"} ARS</p>
           <p className="text-[11px] text-gray-400">Dólar oficial</p>
         </div>
       )}
 
-      {/* Categorías */}
       <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50">
           <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Categorías</h3>
         </div>
-        <div className="py-2">
-          {/* Todos */}
+        <div className="py-1.5">
           <button
             onClick={() => { onCategoryChange('Todos'); onSubcatChange(null); }}
-            className={`w-full text-left px-4 py-2 text-sm transition-all
+            className={`w-full text-left px-4 py-2.5 text-sm transition-all flex items-center gap-2
               ${activeCategory === 'Todos'
-                ? 'bg-blue-600 text-white font-medium'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+                ? 'bg-blue-600 text-white font-semibold'
+                : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'}`}
           >
-            🗂️ <span className="ml-1">Todos</span>
+            <span className="text-base">🗂️</span>
+            <span>Todos</span>
           </button>
 
-          {/* Categorías padre */}
-          {visible.map(cat => (
-            <button
-              key={cat}
-              onClick={() => { onCategoryChange(cat); onSubcatChange(null); }}
-              className={`w-full text-left px-4 py-2 text-sm transition-all capitalize
-                ${activeCategory === cat
-                  ? 'bg-blue-600 text-white font-medium'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+          {parentsWithChildren.map(cat => (
+            <ParentCategoryItem
+              key={cat.id ?? cat.name}
+              cat={cat}
+              activeCategory={activeCategory}
+              activeSubcat={activeSubcat}
+              onCategoryChange={onCategoryChange}
+              onSubcatChange={onSubcatChange}
             >
-              {cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()}
+              {cat.children}
+            </ParentCategoryItem>
+          ))}
+
+          {parentsAlone.map(cat => (
+            <button
+              key={cat.id ?? cat.name}
+              onClick={() => { onCategoryChange(cat.name); onSubcatChange(null); }}
+              className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between gap-2 transition-all
+                ${activeCategory === cat.name
+                  ? 'bg-blue-600 text-white font-semibold'
+                  : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'}`}
+            >
+              <span className="truncate">{cat.name}</span>
+              {cat.product_count > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0
+                  ${activeCategory === cat.name ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                  {cat.product_count > 999 ? `${Math.floor(cat.product_count/1000)}k` : cat.product_count}
+                </span>
+              )}
             </button>
           ))}
 
-          {cats.length > VISIBLE_LIMIT && (
+          {orphans.map(name => (
             <button
-              onClick={() => setExpanded(e => !e)}
-              className="w-full text-left px-4 py-2 text-xs text-blue-500 hover:text-blue-700 font-medium border-t border-gray-50 mt-1"
+              key={name}
+              onClick={() => { onCategoryChange(name); onSubcatChange(null); }}
+              className={`w-full text-left px-4 py-2.5 text-sm transition-all
+                ${activeCategory === name
+                  ? 'bg-blue-600 text-white font-semibold'
+                  : 'text-gray-700 hover:bg-gray-50'}`}
             >
-              {expanded ? '↑ Ver menos' : `+ ${cats.length - VISIBLE_LIMIT} más`}
+              {name}
             </button>
-          )}
+          ))}
         </div>
       </div>
-
-      {/* Subcategorías — aparecen cuando se elige una categoría padre */}
-      {allSubcats.length > 0 && (
-        <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-50">
-            <h3 className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Subcategorías</h3>
-          </div>
-          <div className="py-2">
-            {allSubcats.map(sub => (
-              <button
-                key={sub}
-                onClick={() => onSubcatChange(activeSubcat === sub ? null : sub)}
-                className={`w-full text-left px-4 py-2 text-sm transition-all
-                  ${activeSubcat === sub
-                    ? 'bg-blue-100 text-blue-700 font-medium'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
-              >
-                <span className="mr-1.5 text-gray-300">└</span>
-                {sub}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </aside>
   );
 });
 FilterSidebar.displayName = 'FilterSidebar';
 
-// ── Filtros móvil (drawer) ────────────────────────────────────────────────────
-const MobileFilters = memo(({ categories, categoryTree, subcategoryMap, activeCategory, activeSubcat, onCategoryChange, onSubcatChange, open, onClose }) => {
+const MobileFilters = memo(({ categoryTree, categories, activeCategory, activeSubcat, onCategoryChange, onSubcatChange, open, onClose }) => {
   if (!open) return null;
 
-  const subcats = activeCategory !== 'Todos'
-    ? [...new Set([
-        ...(subcategoryMap[activeCategory] || []),
-        ...(categoryTree.find(c => c.name === activeCategory)?.children?.map(c => c.name) ?? [])
-      ])].sort()
-    : [];
+  const allTreeNames = new Set([
+    ...categoryTree.map(c => c.name),
+    ...categoryTree.flatMap(c => c.children?.map(ch => ch.name) ?? []),
+  ]);
+  const orphans = categories.filter(c => c !== 'Todos' && !allTreeNames.has(c));
 
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
@@ -139,42 +199,33 @@ const MobileFilters = memo(({ categories, categoryTree, subcategoryMap, activeCa
           <h3 className="font-semibold text-gray-800">Categorías</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
         </div>
-        <div className="flex-1 overflow-y-auto py-2">
+        <div className="flex-1 overflow-y-auto py-1.5">
           <button
             onClick={() => { onCategoryChange('Todos'); onSubcatChange(null); onClose(); }}
-            className={`w-full text-left px-5 py-3 text-sm transition-all
-              ${activeCategory === 'Todos' ? 'bg-blue-600 text-white font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
+            className={`w-full text-left px-5 py-3 text-sm flex items-center gap-2 transition-all
+              ${activeCategory === 'Todos' ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}
           >
             🗂️ Todos
           </button>
-          {categories.filter(c => c !== 'Todos').map(cat => (
-            <button
-              key={cat}
-              onClick={() => { onCategoryChange(cat); onSubcatChange(null); onClose(); }}
-              className={`w-full text-left px-5 py-3 text-sm capitalize transition-all
-                ${activeCategory === cat ? 'bg-blue-600 text-white font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
-            >
-              {cat.charAt(0).toUpperCase() + cat.slice(1).toLowerCase()}
+          {categoryTree.map(cat => {
+            const hasChildren = cat.children?.length > 0;
+            const childIsActive = hasChildren && cat.children.some(c => activeCategory === c.name);
+            const isActive = activeCategory === cat.name;
+            return (
+              <MobileCatItem key={cat.id ?? cat.name} cat={cat} hasChildren={hasChildren}
+                childIsActive={childIsActive} isActive={isActive}
+                activeCategory={activeCategory}
+                onCategoryChange={onCategoryChange} onSubcatChange={onSubcatChange} onClose={onClose} />
+            );
+          })}
+          {orphans.map(name => (
+            <button key={name}
+              onClick={() => { onCategoryChange(name); onSubcatChange(null); onClose(); }}
+              className={`w-full text-left px-5 py-3 text-sm transition-all
+                ${activeCategory === name ? 'bg-blue-600 text-white font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}>
+              {name}
             </button>
           ))}
-
-          {subcats.length > 0 && (
-            <>
-              <div className="px-5 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-t mt-1">
-                Subcategorías
-              </div>
-              {subcats.map(sub => (
-                <button
-                  key={sub}
-                  onClick={() => { onSubcatChange(activeSubcat === sub ? null : sub); onClose(); }}
-                  className={`w-full text-left px-6 py-2.5 text-sm transition-all
-                    ${activeSubcat === sub ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-500 hover:bg-gray-50'}`}
-                >
-                  └ {sub}
-                </button>
-              ))}
-            </>
-          )}
         </div>
       </div>
     </div>
@@ -182,7 +233,43 @@ const MobileFilters = memo(({ categories, categoryTree, subcategoryMap, activeCa
 });
 MobileFilters.displayName = 'MobileFilters';
 
-// ── Paginación ────────────────────────────────────────────────────────────────
+function MobileCatItem({ cat, hasChildren, childIsActive, isActive, activeCategory, onCategoryChange, onSubcatChange, onClose }) {
+  const [localOpen, setLocalOpen] = useState(isActive || childIsActive);
+  return (
+    <div>
+      <button
+        onClick={() => {
+          if (hasChildren) setLocalOpen(o => !o);
+          onCategoryChange(cat.name);
+          onSubcatChange(null);
+          if (!hasChildren) onClose();
+        }}
+        className={`w-full text-left px-5 py-3 text-sm flex items-center justify-between gap-2 transition-all
+          ${isActive && !childIsActive ? 'bg-blue-600 text-white font-semibold'
+            : childIsActive ? 'bg-blue-50 text-blue-700 font-semibold'
+            : 'text-gray-600 hover:bg-gray-50'}`}
+      >
+        <span>{cat.name}</span>
+        {hasChildren && <ChevronIcon open={localOpen || isActive || childIsActive} />}
+      </button>
+      {hasChildren && (localOpen || isActive || childIsActive) && (
+        <div className="border-l-2 border-blue-100 ml-5">
+          {cat.children.map(child => (
+            <button key={child.id ?? child.name}
+              onClick={() => { onCategoryChange(child.name); onSubcatChange(null); onClose(); }}
+              className={`w-full text-left pl-4 pr-5 py-2.5 text-[13px] transition-all
+                ${activeCategory === child.name
+                  ? 'text-blue-700 font-semibold bg-blue-50'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'}`}>
+              {child.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const Pagination = memo(({ page, totalPages, onChange }) => {
   if (totalPages <= 1) return null;
   const pages = useMemo(() => {
@@ -218,7 +305,6 @@ const Pagination = memo(({ page, totalPages, onChange }) => {
 });
 Pagination.displayName = 'Pagination';
 
-// ── Skeleton ──────────────────────────────────────────────────────────────────
 const SkeletonGrid = () => (
   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
     {[...Array(12)].map((_, i) => (
@@ -235,7 +321,6 @@ const SkeletonGrid = () => (
   </div>
 );
 
-// ── Componente principal ──────────────────────────────────────────────────────
 export default function StoreCatalog() {
   const [activeCategory, setActiveCategory] = useState('Todos');
   const [activeSubcat,   setActiveSubcat]   = useState(null);
@@ -245,21 +330,28 @@ export default function StoreCatalog() {
   const [page,           setPage]           = useState(0);
   const [mobileOpen,     setMobileOpen]     = useState(false);
 
-  const { categories, categoryTree, subcategoryMap } = useProductsMeta();
+  const { categories, categoryTree } = useProductsMeta();
   useSEO({
-    title: activeCategory !== 'Todos'
-      ? (activeSubcat ? `${activeSubcat} — ${activeCategory}` : activeCategory)
-      : 'Catálogo de Productos',
+    title: activeCategory !== 'Todos' ? activeCategory : 'Catálogo de Productos',
     description: 'Explorá nuestro catálogo completo de tecnología y computación.',
   });
 
+  const activeCatNode = useMemo(
+    () => categoryTree.find(c => c.name === activeCategory),
+    [categoryTree, activeCategory]
+  );
+  const isParentSelected = activeCatNode && activeCatNode.children?.length > 0;
+
   const filters = useMemo(() => ({
     categoria:    activeCategory !== 'Todos' ? activeCategory : '',
+    hijos:        isParentSelected
+                    ? activeCatNode.children.map(c => c.name).join(',')
+                    : '',
     subcategoria: activeSubcat ?? '',
     buscar:       searchTerm,
     limit:        PAGE_SIZE,
     offset:       page * PAGE_SIZE,
-  }), [activeCategory, activeSubcat, searchTerm, page]);
+  }), [activeCategory, activeSubcat, searchTerm, page, isParentSelected, activeCatNode]);
 
   const { products, total, loading } = useProducts(filters);
 
@@ -274,124 +366,89 @@ export default function StoreCatalog() {
   const totalPages = useMemo(() => Math.ceil(total / PAGE_SIZE), [total]);
   const dolarRate  = products[0]?.dolar_rate;
 
-  const handleSearch = useCallback((val) => {
-    setSearchTerm(val);
-    setPage(0);
-  }, []);
-
-  const handleCategoryChange = useCallback((cat) => {
-    setActiveCategory(cat);
-    setActiveSubcat(null);
-    setPage(0);
-  }, []);
-
-  const handleSubcatChange = useCallback((sub) => {
-    setActiveSubcat(sub);
-    setPage(0);
-  }, []);
+  const handleSearch = useCallback((val) => { setSearchTerm(val); setPage(0); }, []);
+  const handleCategoryChange = useCallback((cat) => { setActiveCategory(cat); setActiveSubcat(null); setPage(0); }, []);
+  const handleSubcatChange = useCallback((sub) => { setActiveSubcat(sub); setPage(0); }, []);
 
   const activeFiltersCount = (activeCategory !== 'Todos' ? 1 : 0) + (activeSubcat ? 1 : 0);
 
+  const parentOfActive = useMemo(() => {
+    if (activeCategory === 'Todos') return null;
+    return categoryTree.find(c => c.children?.some(ch => ch.name === activeCategory)) ?? null;
+  }, [activeCategory, categoryTree]);
+
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 py-6">
-
-      {/* Header */}
       <div className="mb-5">
         <h1 className="text-2xl font-bold text-gray-800">Nuestros Productos</h1>
         <p className="text-gray-400 text-sm mt-0.5">
-          {loading ? 'Cargando...' : `${total.toLocaleString('es-AR')} producto${total !== 1 ? 's' : ''} disponibles`}
+          {loading ? 'Cargando...' : `${"{"}total.toLocaleString('es-AR'){"}"} producto${"{"}total !== 1 ? 's' : ''{"}"} disponibles`}
         </p>
+        {parentOfActive && (
+          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-400">
+            <button onClick={() => handleCategoryChange(parentOfActive.name)} className="hover:text-blue-600 transition-colors">
+              {parentOfActive.name}
+            </button>
+            <span>›</span>
+            <span className="text-gray-600 font-medium">{"{"}activeCategory{"}"}</span>
+          </div>
+        )}
       </div>
 
-      {/* Barra superior */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 px-3 py-2.5 mb-5 flex gap-2 items-center">
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="lg:hidden flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 flex-shrink-0"
-        >
+        <button onClick={() => setMobileOpen(true)}
+          className="lg:hidden flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 flex-shrink-0">
           ☰
           {activeFiltersCount > 0 && (
-            <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{activeFiltersCount}</span>
+            <span className="bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{"{"}activeFiltersCount{"}"}</span>
           )}
         </button>
 
-        <input
-          id="catalog-search"
-          name="catalog-search"
-          type="text"
+        <input id="catalog-search" name="catalog-search" type="text"
           placeholder="🔍 Buscar por nombre o marca..."
-          value={inputValue}
+          value={"{"}inputValue{"}"}
           onChange={e => setInputValue(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSearch(inputValue)}
           onBlur={() => inputValue !== searchTerm && handleSearch(inputValue)}
-          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm
-                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
 
-        <select
-          id="catalog-sort"
-          name="catalog-sort"
-          value={sortBy}
-          onChange={e => { setSortBy(e.target.value); setPage(0); }}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white
-                     focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[165px] hidden sm:block"
-        >
-          {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        <select id="catalog-sort" name="catalog-sort" value={"{"}sortBy{"}"} onChange={e => { setSortBy(e.target.value); setPage(0); }}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[165px] hidden sm:block">
+          {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{"{"}o.label{"}"}</option>)}
         </select>
 
-        {/* Chips de filtros activos */}
         {activeCategory !== 'Todos' && (
-          <button
-            onClick={() => { handleCategoryChange('Todos'); }}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200
-                       text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 flex-shrink-0 whitespace-nowrap"
-          >
-            <span className="capitalize max-w-[100px] truncate">{activeCategory.toLowerCase()}</span>
+          <button onClick={() => handleCategoryChange('Todos')}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 flex-shrink-0 whitespace-nowrap">
+            <span className="capitalize max-w-[120px] truncate">{"{"}activeCategory{"}"}</span>
             <span className="text-blue-400">✕</span>
-          </button>
-        )}
-        {activeSubcat && (
-          <button
-            onClick={() => handleSubcatChange(null)}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-indigo-50 border border-indigo-200
-                       text-indigo-700 rounded-lg text-sm font-medium hover:bg-indigo-100 flex-shrink-0 whitespace-nowrap"
-          >
-            <span className="max-w-[100px] truncate">{activeSubcat}</span>
-            <span className="text-indigo-400">✕</span>
           </button>
         )}
       </div>
 
-      {/* Layout: sidebar + grid */}
       <div className="flex gap-5">
-
         <FilterSidebar
-          categories={categories}
-          categoryTree={categoryTree}
-          subcategoryMap={subcategoryMap}
-          activeCategory={activeCategory}
-          activeSubcat={activeSubcat}
-          onCategoryChange={handleCategoryChange}
-          onSubcatChange={handleSubcatChange}
-          dolarRate={dolarRate}
+          categories={"{"}categories{"}"}
+          categoryTree={"{"}categoryTree{"}"}
+          activeCategory={"{"}activeCategory{"}"}
+          activeSubcat={"{"}activeSubcat{"}"}
+          onCategoryChange={"{"}handleCategoryChange{"}"}
+          onSubcatChange={"{"}handleSubcatChange{"}"}
+          dolarRate={"{"}dolarRate{"}"}
         />
 
-        {/* Grid */}
         <div className="flex-1 min-w-0">
           {loading ? (
             <SkeletonGrid />
           ) : sorted.length > 0 ? (
             <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-                {sorted.map((p, i) => (
-                  <ProductCard key={p.id} product={p} priority={i < 4} />
-                ))}
+                {sorted.map((p, i) => <ProductCard key={p.id} product={p} priority={i < 4} />)}
               </div>
-
-              <Pagination page={page} totalPages={totalPages} onChange={setPage} />
-
+              <Pagination page={"{"}page{"}"} totalPages={"{"}totalPages{"}"} onChange={"{"}setPage{"}"} />
               <p className="text-center text-xs text-gray-400 mt-3">
-                Mostrando {(page * PAGE_SIZE + 1).toLocaleString('es-AR')}–{Math.min((page + 1) * PAGE_SIZE, total).toLocaleString('es-AR')} de {total.toLocaleString('es-AR')} productos
+                Mostrando {"{"}(page * PAGE_SIZE + 1).toLocaleString('es-AR'){"}"} – {"{"}Math.min((page + 1) * PAGE_SIZE, total).toLocaleString('es-AR'){"}"} de {"{"}total.toLocaleString('es-AR'){"}"} productos
               </p>
             </>
           ) : (
@@ -399,10 +456,8 @@ export default function StoreCatalog() {
               <span className="text-5xl mb-4 block">🔍</span>
               <h3 className="text-lg font-semibold text-gray-700 mb-2">Sin resultados</h3>
               <p className="text-gray-500 text-sm mb-5">Probá con otra búsqueda o categoría</p>
-              <button
-                onClick={() => { handleCategoryChange('Todos'); setInputValue(''); handleSearch(''); }}
-                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
-              >
+              <button onClick={() => { handleCategoryChange('Todos'); setInputValue(''); handleSearch(''); }}
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
                 Ver todos los productos
               </button>
             </div>
@@ -411,14 +466,13 @@ export default function StoreCatalog() {
       </div>
 
       <MobileFilters
-        categories={categories}
-        categoryTree={categoryTree}
-        subcategoryMap={subcategoryMap}
-        activeCategory={activeCategory}
-        activeSubcat={activeSubcat}
-        onCategoryChange={handleCategoryChange}
-        onSubcatChange={handleSubcatChange}
-        open={mobileOpen}
+        categories={"{"}categories{"}"}
+        categoryTree={"{"}categoryTree{"}"}
+        activeCategory={"{"}activeCategory{"}"}
+        activeSubcat={"{"}activeSubcat{"}"}
+        onCategoryChange={"{"}handleCategoryChange{"}"}
+        onSubcatChange={"{"}handleSubcatChange{"}"}
+        open={"{"}mobileOpen{"}"}
         onClose={() => setMobileOpen(false)}
       />
     </div>
