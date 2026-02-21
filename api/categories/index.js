@@ -120,7 +120,6 @@ async function createCategory(pool, { name, markup_pct, parent_id }) {
       },
     },
   };
-}
 
 // ── UPDATE ────────────────────────────────────────────────────────────────────
 
