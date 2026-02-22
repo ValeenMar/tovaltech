@@ -6,6 +6,49 @@ const crypto = require('crypto');
 
 const COOKIE_NAME = 'tovaltech_auth';
 const JWT_EXPIRY  = '1y';
+const USERS_SCHEMA_CACHE_MS = 5 * 60 * 1000;
+
+let cachedUsersSchema = null;
+let cachedUsersSchemaAt = 0;
+
+function isEmailConfirmationRequired() {
+  const raw = String(process.env.AUTH_REQUIRE_EMAIL_CONFIRMATION || '').trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
+async function getUsersSchema(pool, { force = false } = {}) {
+  if (!force && cachedUsersSchema && Date.now() - cachedUsersSchemaAt < USERS_SCHEMA_CACHE_MS) {
+    return cachedUsersSchema;
+  }
+
+  const result = await pool.request().query(`
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = 'dbo'
+      AND TABLE_NAME = 'tovaltech_users'
+  `);
+
+  const cols = new Set((result.recordset || []).map((r) => String(r.COLUMN_NAME || '').toLowerCase()));
+  const schema = {
+    tableExists: cols.size > 0,
+    hasId: cols.has('id'),
+    hasName: cols.has('name'),
+    hasLastName: cols.has('last_name'),
+    hasEmail: cols.has('email'),
+    hasPasswordHash: cols.has('password_hash'),
+    hasConfirmed: cols.has('confirmed'),
+    hasConfirmToken: cols.has('confirm_token'),
+    hasConfirmExpires: cols.has('confirm_expires'),
+    hasUpdatedAt: cols.has('updated_at'),
+  };
+
+  schema.hasCoreColumns = schema.hasId && schema.hasName && schema.hasEmail && schema.hasPasswordHash;
+  schema.canUseEmailConfirmation = schema.hasConfirmed && schema.hasConfirmToken && schema.hasConfirmExpires;
+
+  cachedUsersSchema = schema;
+  cachedUsersSchemaAt = Date.now();
+  return schema;
+}
 
 // ── JWT ──────────────────────────────────────────────────────────────────────
 
@@ -56,6 +99,7 @@ function generateConfirmToken() {
 async function sendConfirmEmail({ to, name, token }) {
   const RESEND_KEY = process.env.RESEND_KEY;
   const SITE_URL   = (process.env.SITE_URL || 'https://www.tovaltech.com.ar').replace(/\/$/, '');
+  const FROM_EMAIL = process.env.AUTH_FROM_EMAIL || 'TovalTech <no-reply@tovaltech.com.ar>';
 
   if (!RESEND_KEY) throw new Error('RESEND_KEY no configurado');
 
@@ -134,7 +178,7 @@ async function sendConfirmEmail({ to, name, token }) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from:    'TovalTech <no-reply@tovaltech.com.ar>',
+      from:    FROM_EMAIL,
       to:      [to],
       subject: 'Confirmá tu cuenta en TovalTech',
       html,
@@ -154,5 +198,7 @@ module.exports = {
   buildClearCookie,
   getTokenFromRequest,
   generateConfirmToken,
+  getUsersSchema,
+  isEmailConfirmationRequired,
   sendConfirmEmail,
 };

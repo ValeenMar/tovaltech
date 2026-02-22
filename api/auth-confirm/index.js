@@ -9,7 +9,7 @@
  */
 
 const connectDB  = require('../db');
-const { signToken, buildSetCookie } = require('../auth-utils');
+const { signToken, buildSetCookie, getUsersSchema } = require('../auth-utils');
 
 const HEADERS = { 'content-type': 'application/json' };
 
@@ -23,12 +23,24 @@ module.exports = async function (context, req) {
 
   try {
     const pool = await connectDB();
+    const schema = await getUsersSchema(pool);
+
+    if (!schema.tableExists) {
+      context.log.error('auth_confirm_schema_missing', 'dbo.tovaltech_users no existe');
+      context.res = { status: 500, headers: HEADERS, body: { error: 'auth_schema_missing' } };
+      return;
+    }
+
+    if (!schema.canUseEmailConfirmation) {
+      context.res = { status: 400, headers: HEADERS, body: { error: 'confirmation_disabled' } };
+      return;
+    }
 
     // Buscar usuario por token
     const result = await pool.request()
       .input('token', token)
       .query(`
-        SELECT id, name, last_name, email, confirmed, confirm_expires
+        SELECT id, name${schema.hasLastName ? ', last_name' : ''}, email, confirmed, confirm_expires
         FROM dbo.tovaltech_users
         WHERE confirm_token = @token
       `);
@@ -58,11 +70,14 @@ module.exports = async function (context, req) {
     }
 
     // Confirmar usuario
+    const setFields = ['confirmed = 1', 'confirm_token = NULL', 'confirm_expires = NULL'];
+    if (schema.hasUpdatedAt) setFields.push('updated_at = GETDATE()');
+
     await pool.request()
       .input('id', user.id)
       .query(`
         UPDATE dbo.tovaltech_users
-        SET confirmed = 1, confirm_token = NULL, confirm_expires = NULL, updated_at = GETDATE()
+        SET ${setFields.join(', ')}
         WHERE id = @id
       `);
 
@@ -78,7 +93,7 @@ module.exports = async function (context, req) {
       body: {
         ok: true,
         message: 'confirmed',
-        user: { name: user.name, lastName: user.last_name, email: user.email },
+        user: { name: user.name, lastName: user.last_name || '', email: user.email },
       },
     };
 

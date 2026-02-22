@@ -77,12 +77,22 @@ function Carousel({ banners, width, height }) {
     return () => clearInterval(t)
   }, [total, paused, current])
 
-  const ratio = `${width} / ${height}`
+  const normalizedWidth = Math.max(1, Number(width) || 1440)
+  const normalizedHeight = Math.max(1, Number(height) || 500)
+  const ratio = `${normalizedWidth} / ${normalizedHeight}`
+  const desktopHeight = Math.max(280, Math.min(normalizedHeight, 900))
+  const mobileMinHeight = Math.max(220, Math.round(desktopHeight * 0.62))
+  const mobileMaxHeight = Math.max(300, Math.round(desktopHeight * 0.86))
 
   return (
     <section
       className="relative w-full overflow-hidden select-none"
-      style={{ aspectRatio: ratio, maxHeight: `${height}px` }}
+      style={{
+        aspectRatio: ratio,
+        minHeight: `${mobileMinHeight}px`,
+        maxHeight: `min(${desktopHeight}px, 78vh)`,
+        height: `clamp(${mobileMinHeight}px, calc(100vw * ${normalizedHeight} / ${normalizedWidth}), ${mobileMaxHeight}px)`,
+      }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
@@ -99,13 +109,13 @@ function Carousel({ banners, width, height }) {
               <img src={b.image_url} alt={b.title || `Banner ${i + 1}`}
                    loading={i === 0 ? 'eager' : 'lazy'}
                    fetchpriority={i === 0 ? 'high' : 'auto'}
-                   className="w-full h-full object-cover" draggable={false} />
+                   className="w-full h-full object-cover object-center" draggable={false} />
             </a>
           ) : (
             <img src={b.image_url} alt={b.title || `Banner ${i + 1}`}
                  loading={i === 0 ? 'eager' : 'lazy'}
                  fetchpriority={i === 0 ? 'high' : 'auto'}
-                 className="w-full h-full object-cover" draggable={false} />
+                 className="w-full h-full object-cover object-center" draggable={false} />
           )}
 
           {/* Texto superpuesto */}
@@ -173,4 +183,3 @@ export default function HeroSection() {
   if (banners === null || banners.length === 0) return <DefaultHero />
   return <Carousel banners={banners} width={bannerWidth} height={bannerHeight} />
 }
-

@@ -9,11 +9,18 @@
 
 const bcrypt    = require('bcryptjs');
 const connectDB = require('../db');
-const { signToken, buildSetCookie } = require('../auth-utils');
+const {
+  signToken,
+  buildSetCookie,
+  isEmailConfirmationRequired,
+  getUsersSchema,
+} = require('../auth-utils');
 
 const HEADERS = { 'content-type': 'application/json' };
 
 module.exports = async function (context, req) {
+  const requireEmailConfirm = isEmailConfirmationRequired();
+
   if (req.method !== 'POST') {
     context.res = { status: 405, headers: HEADERS, body: { error: 'Method not allowed' } };
     return;
@@ -28,11 +35,24 @@ module.exports = async function (context, req) {
 
   try {
     const pool = await connectDB();
+    const schema = await getUsersSchema(pool);
+
+    if (!schema.tableExists) {
+      context.log.error('auth_login_schema_missing', 'dbo.tovaltech_users no existe');
+      context.res = { status: 500, headers: HEADERS, body: { error: 'auth_schema_missing' } };
+      return;
+    }
+
+    if (!schema.hasCoreColumns) {
+      context.log.error('auth_login_schema_invalid', JSON.stringify(schema));
+      context.res = { status: 500, headers: HEADERS, body: { error: 'auth_schema_invalid' } };
+      return;
+    }
 
     const result = await pool.request()
       .input('email', email.trim().toLowerCase())
       .query(`
-        SELECT id, name, last_name, email, password_hash, confirmed
+        SELECT id, name${schema.hasLastName ? ', last_name' : ''}, email, password_hash${schema.hasConfirmed ? ', confirmed' : ''}
         FROM dbo.tovaltech_users
         WHERE email = @email
       `);
@@ -52,9 +72,23 @@ module.exports = async function (context, req) {
       return;
     }
 
-    if (!user.confirmed) {
-      context.res = { status: 403, headers: HEADERS, body: { error: 'email_sin_confirmar' } };
-      return;
+    const userConfirmed = schema.hasConfirmed ? Boolean(user.confirmed) : true;
+    if (!userConfirmed) {
+      if (requireEmailConfirm) {
+        context.res = { status: 403, headers: HEADERS, body: { error: 'email_sin_confirmar' } };
+        return;
+      }
+
+      const setFields = ['confirmed = 1'];
+      if (schema.hasUpdatedAt) setFields.push('updated_at = GETDATE()');
+
+      await pool.request()
+        .input('id', user.id)
+        .query(`
+          UPDATE dbo.tovaltech_users
+          SET ${setFields.join(', ')}
+          WHERE id = @id
+        `);
     }
 
     const jwt = signToken({ id: user.id, email: user.email, name: user.name });

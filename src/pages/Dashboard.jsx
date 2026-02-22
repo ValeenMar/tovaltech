@@ -2,6 +2,7 @@
 // Panel admin — Dashboard conectado a datos reales desde Azure SQL.
 
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import StatCard from '../components/ui/StatCard'
 import StatusBadge from '../components/ui/StatusBadge'
 
@@ -70,6 +71,37 @@ export default function Dashboard() {
 
   return (
     <>
+      <section className="mb-6 rounded-2xl border border-slate-200/70 bg-gradient-to-br from-slate-900 to-blue-900 text-white p-5 sm:p-6 shadow-xl shadow-slate-900/20">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-blue-200/80 font-semibold">Vista Operativa</p>
+            <h1 className="text-2xl sm:text-3xl font-bold mt-1">Dashboard diario</h1>
+            <p className="text-blue-100/85 text-sm mt-1">
+              Seguimiento de caja, pedidos recientes y alertas de stock en tiempo real.
+            </p>
+          </div>
+          <Link
+            to="/admin/analytics"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-blue-700 px-4 py-2.5 text-sm font-semibold hover:bg-blue-50 transition-colors"
+          >
+            Ver analíticas
+            <span aria-hidden>→</span>
+          </Link>
+        </div>
+
+        <div className="mt-5 inline-flex rounded-xl border border-white/20 bg-white/5 p-1">
+          <span className="px-3 py-1.5 rounded-lg bg-white text-slate-900 text-xs font-semibold">
+            Dashboard
+          </span>
+          <Link
+            to="/admin/analytics"
+            className="px-3 py-1.5 rounded-lg text-xs text-white/80 hover:text-white transition-colors"
+          >
+            Analíticas
+          </Link>
+        </div>
+      </section>
+
       {/* ── Stat cards ─────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard

@@ -106,29 +106,36 @@ export default function Sidebar() {
         </nav>
 
         <div className="shrink-0 px-3 pb-3">
-          {sidebarOpen && (
-            <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 mb-3">
-              <p className="text-[11px] font-semibold text-white/90">Atajo rapido</p>
-              <p className="text-[11px] text-white/60 mt-0.5">
-                Abri navegador inteligente con <span className="admin-kbd">Ctrl</span> + <span className="admin-kbd">K</span>
-              </p>
-            </div>
-          )}
-
           <a
-            href="/"
+            href="/productos"
             target="_blank"
             rel="noopener noreferrer"
             title="Ver tienda"
             className={`flex items-center gap-3 rounded-xl border border-white/15 px-3 py-2.5 text-sm font-medium
               text-white/75 hover:text-white hover:bg-white/10 transition-all duration-200 ${
+              !sidebarOpen ? 'lg:justify-center lg:px-0' : ''
+            }`}
+          >
+            <span className="w-6 h-6 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center text-[12px] font-bold">
+              △
+            </span>
+            {sidebarOpen && <span className="flex-1">Ver tienda</span>}
+          </a>
+
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Ver inicio"
+            className={`mt-2 flex items-center gap-3 rounded-xl border border-white/15 px-3 py-2.5 text-sm font-medium
+              text-white/75 hover:text-white hover:bg-white/10 transition-all duration-200 ${
                 !sidebarOpen ? 'lg:justify-center lg:px-0' : ''
               }`}
           >
             <span className="w-6 h-6 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center text-[12px] font-bold">
-              ↗
+              ◉
             </span>
-            {sidebarOpen && <span className="flex-1">Ver tienda</span>}
+            {sidebarOpen && <span className="flex-1">Ver inicio</span>}
           </a>
         </div>
       </aside>

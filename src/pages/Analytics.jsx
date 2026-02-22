@@ -3,6 +3,7 @@
 // Muestra: revenue mensual, top productos, desglose por zona y estado.
 
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import StatCard from '../components/ui/StatCard'
 
 const fmtARS = (n) => new Intl.NumberFormat('es-AR', {
@@ -122,6 +123,37 @@ export default function Analytics() {
 
   return (
     <>
+      <section className="mb-6 rounded-2xl border border-slate-200/70 bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-700 text-white p-5 sm:p-6 shadow-xl shadow-blue-900/20">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-blue-100/85 font-semibold">Vista Estratégica</p>
+            <h1 className="text-2xl sm:text-3xl font-bold mt-1">Analíticas de negocio</h1>
+            <p className="text-blue-100/90 text-sm mt-1">
+              Tendencias de ingresos, productos top y distribución de pedidos por zona y estado.
+            </p>
+          </div>
+          <Link
+            to="/admin"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-blue-700 px-4 py-2.5 text-sm font-semibold hover:bg-blue-50 transition-colors"
+          >
+            Ver dashboard
+            <span aria-hidden>→</span>
+          </Link>
+        </div>
+
+        <div className="mt-5 inline-flex rounded-xl border border-white/20 bg-white/5 p-1">
+          <Link
+            to="/admin"
+            className="px-3 py-1.5 rounded-lg text-xs text-white/80 hover:text-white transition-colors"
+          >
+            Dashboard
+          </Link>
+          <span className="px-3 py-1.5 rounded-lg bg-white text-slate-900 text-xs font-semibold">
+            Analíticas
+          </span>
+        </div>
+      </section>
+
       {/* ── Tarjetas resumen ──────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard
