@@ -26,6 +26,12 @@ const commands = [
   { path: '/admin/settings', icon: '⚙', label: 'Abrir Configuracion', keywords: 'sync sistema ajustes' },
 ];
 
+const themeOptions = [
+  { value: 'violet', label: 'Violeta', icon: '◈', dot: 'bg-violet-500' },
+  { value: 'green', label: 'Verde', icon: '⬢', dot: 'bg-emerald-500' },
+  { value: 'red', label: 'Rojo', icon: '✶', dot: 'bg-rose-500' },
+];
+
 const fmtARS = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
     .format(n ?? 0);
@@ -213,7 +219,7 @@ function CommandPalette({
 export default function Topbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { sidebarOpen, setSidebarOpen, ultraMode, toggleUltraMode } = useApp();
+  const { sidebarOpen, setSidebarOpen, adminTheme, setAdminTheme } = useApp();
   const title = pageTitles[location.pathname] ?? 'Admin';
 
   const [searchValue, setSearchValue] = useState('');
@@ -225,6 +231,8 @@ export default function Topbar() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState('');
   const [paletteIndex, setPaletteIndex] = useState(0);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const themeMenuRef = useRef(null);
 
   const filteredCommands = useMemo(() => {
     const q = paletteQuery.trim().toLowerCase();
@@ -264,7 +272,19 @@ export default function Topbar() {
 
   useEffect(() => {
     setPanelOpen(false);
+    setThemeMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!themeMenuOpen) return undefined;
+    const onMouseDown = (event) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(event.target)) {
+        setThemeMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [themeMenuOpen]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -342,6 +362,7 @@ export default function Topbar() {
     if (!panelOpen && !notifData) loadNotifs();
     setPanelOpen((v) => !v);
   };
+  const currentTheme = themeOptions.find((option) => option.value === adminTheme) || themeOptions[0];
 
   return (
     <>
@@ -376,7 +397,9 @@ export default function Topbar() {
 
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="hidden lg:flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5">
-            <span className={`w-2 h-2 rounded-full ${ultraMode ? 'pulse-live-danger bg-rose-500' : 'bg-emerald-500 pulse-live'}`} />
+            <span className={`w-2 h-2 rounded-full ${
+              adminTheme === 'red' ? 'bg-rose-500' : adminTheme === 'green' ? 'bg-emerald-500' : 'bg-violet-500'
+            } pulse-live`} />
             <span className="text-[11px] font-semibold text-slate-500">Flujo activo</span>
           </div>
 
@@ -389,27 +412,48 @@ export default function Topbar() {
             <span className="admin-kbd !text-slate-500 !border-slate-200 !bg-slate-100">Ctrl K</span>
           </button>
 
-          <div className="relative">
+          <div className="relative" ref={themeMenuRef}>
             <button
-              onClick={toggleUltraMode}
-              className={`mr-2 relative w-9 h-9 rounded-xl border transition-colors ${
-                ultraMode
-                  ? 'border-rose-300 bg-rose-50 text-rose-600 shadow-[0_0_18px_rgba(255,74,102,0.45)] neon-blink'
-                  : 'border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-300'
-              }`}
-              title={ultraMode ? 'Desactivar modo ultra pro' : 'Activar modo ultra pro'}
-              aria-label="Cambiar modo visual"
+              onClick={() => setThemeMenuOpen((prev) => !prev)}
+              className="relative w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-slate-800 hover:border-slate-300 transition-colors"
+              title={`Color: ${currentTheme.label}`}
+              aria-label="Cambiar color del panel"
             >
-              {ultraMode ? '⛧' : '✦'}
+              {currentTheme.icon}
             </button>
+            <span className={`absolute bottom-0.5 right-0.5 w-2 h-2 rounded-full ring-2 ring-white ${currentTheme.dot}`} />
 
+            {themeMenuOpen && (
+              <div className="absolute right-0 top-11 z-[140] w-44 rounded-xl border border-slate-200 bg-white/95 backdrop-blur-xl shadow-2xl shadow-slate-900/15 p-1.5">
+                <p className="px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-slate-400 font-semibold">Paleta</p>
+                {themeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => { setAdminTheme(option.value); setThemeMenuOpen(false); }}
+                    className={`w-full mt-1 rounded-lg px-2.5 py-2 text-xs font-semibold border flex items-center gap-2 transition-colors ${
+                      adminTheme === option.value
+                        ? 'border-slate-300 bg-slate-100 text-slate-700'
+                        : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                    }`}
+                  >
+                    <span className={`w-2.5 h-2.5 rounded-full ${option.dot}`} />
+                    <span>{option.label}</span>
+                    <span className="ml-auto text-[12px] opacity-80">{option.icon}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
             <button
               onClick={handleBell}
               className="relative w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-300 transition-colors"
               title="Actividad"
               aria-label="Actividad"
             >
-              {ultraMode ? '◈' : '⎋'}
+              ⎋
               {notifCount > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
                   {notifCount > 9 ? '9+' : notifCount}
@@ -425,7 +469,13 @@ export default function Topbar() {
             />
           </div>
 
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 text-white text-sm font-bold flex items-center justify-center shadow-md shadow-blue-500/30">
+          <div className={`admin-avatar-led w-9 h-9 rounded-xl text-white text-sm font-bold flex items-center justify-center shadow-md ${
+            adminTheme === 'red'
+              ? 'bg-gradient-to-br from-rose-500 to-red-500 shadow-rose-500/35'
+              : adminTheme === 'green'
+                ? 'bg-gradient-to-br from-emerald-500 to-teal-500 shadow-emerald-500/30'
+                : 'bg-gradient-to-br from-violet-500 to-indigo-500 shadow-violet-500/30'
+          }`}>
             VT
           </div>
         </div>

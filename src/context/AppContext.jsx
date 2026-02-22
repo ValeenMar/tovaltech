@@ -1,37 +1,51 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 
 const AppContext = createContext()
-const ULTRA_MODE_KEY = 'admin_ultra_mode'
+const ADMIN_THEME_KEY = 'admin_theme'
+const ADMIN_THEME_VALUES = ['violet', 'green', 'red']
 
-function readInitialUltraMode() {
-  if (typeof window === 'undefined') return false
+function normalizeTheme(value) {
+  return ADMIN_THEME_VALUES.includes(value) ? value : 'violet'
+}
+
+function readInitialTheme() {
+  if (typeof window === 'undefined') return 'violet'
   try {
-    return window.localStorage.getItem(ULTRA_MODE_KEY) === '1'
+    return normalizeTheme(window.localStorage.getItem(ADMIN_THEME_KEY))
   } catch {
-    return false
+    return 'violet'
   }
 }
 
 export function AppProvider({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [ultraMode, setUltraMode] = useState(readInitialUltraMode)
+  const [adminThemeState, setAdminThemeState] = useState(readInitialTheme)
   // Filtro que Categories puede pasar a Products al navegar
   const [adminCategoryFilter, setAdminCategoryFilter] = useState('')
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      window.localStorage.setItem(ULTRA_MODE_KEY, ultraMode ? '1' : '0')
+      window.localStorage.setItem(ADMIN_THEME_KEY, adminThemeState)
     } catch {
       // ignore write errors in private mode
     }
-  }, [ultraMode])
+  }, [adminThemeState])
 
-  const toggleUltraMode = () => setUltraMode(prev => !prev)
+  const setAdminTheme = (theme) => setAdminThemeState(normalizeTheme(theme))
+  const cycleAdminTheme = () => {
+    setAdminThemeState((prev) => {
+      const index = ADMIN_THEME_VALUES.indexOf(prev)
+      const next = index === -1 ? 0 : (index + 1) % ADMIN_THEME_VALUES.length
+      return ADMIN_THEME_VALUES[next]
+    })
+  }
 
   const value = {
     sidebarOpen, setSidebarOpen,
-    ultraMode, setUltraMode, toggleUltraMode,
+    adminTheme: adminThemeState,
+    setAdminTheme,
+    cycleAdminTheme,
     adminCategoryFilter, setAdminCategoryFilter,
   }
 

@@ -13,14 +13,22 @@ const navItems = [
   { key: 'settings', path: '/admin/settings', icon: '⚙', ultraIcon: '⛭', label: 'Configuracion', section: 'Sistema' },
 ];
 
-function TovalTechLogo({ collapsed, ultraMode }) {
+function TovalTechLogo({ collapsed, adminTheme }) {
+  const accentClass = adminTheme === 'red'
+    ? 'bg-rose-500/15 ring-rose-300/45 shadow-[0_0_18px_rgba(255,74,102,0.45)]'
+    : adminTheme === 'green'
+      ? 'bg-emerald-500/15 ring-emerald-300/45 shadow-[0_0_18px_rgba(16,185,129,0.4)]'
+      : 'bg-violet-500/15 ring-violet-300/45 shadow-[0_0_18px_rgba(139,92,246,0.4)]'
+
+  const brandAccent = adminTheme === 'red'
+    ? 'text-rose-300'
+    : adminTheme === 'green'
+      ? 'text-emerald-300'
+      : 'text-violet-300'
+
   return (
     <div className="flex items-center gap-3">
-      <div className={`w-10 h-10 rounded-xl ring-1 flex items-center justify-center shadow-lg shadow-black/20 flex-shrink-0 ${
-        ultraMode
-          ? 'bg-rose-500/15 ring-rose-300/45 shadow-[0_0_18px_rgba(255,74,102,0.45)] neon-blink'
-          : 'bg-white/10 ring-white/20'
-      }`}>
+      <div className={`w-10 h-10 rounded-xl ring-1 flex items-center justify-center shadow-lg shadow-black/20 flex-shrink-0 ${accentClass}`}>
         <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="none"
              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="9" y="9" width="6" height="6" rx="1" />
@@ -32,7 +40,7 @@ function TovalTechLogo({ collapsed, ultraMode }) {
       {!collapsed && (
         <div>
           <p className="text-[17px] font-bold leading-none text-white tracking-tight">
-            Toval<span className={ultraMode ? 'text-rose-300' : 'text-cyan-300'}>Tech</span>
+            Toval<span className={brandAccent}>Tech</span>
           </p>
           <p className="text-[10px] tracking-[0.18em] uppercase text-white/45 mt-1">Admin Control</p>
         </div>
@@ -44,7 +52,7 @@ function TovalTechLogo({ collapsed, ultraMode }) {
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { sidebarOpen, setSidebarOpen, ultraMode } = useApp();
+  const { sidebarOpen, setSidebarOpen, adminTheme } = useApp();
   const sections = [...new Set(navItems.map((item) => item.section))];
 
   const isActive = (item) => {
@@ -75,7 +83,7 @@ export default function Sidebar() {
         `}
       >
         <div className="px-4 pt-5 pb-4 border-b border-white/10 shrink-0">
-          <TovalTechLogo collapsed={!sidebarOpen} ultraMode={ultraMode} />
+          <TovalTechLogo collapsed={!sidebarOpen} adminTheme={adminTheme} />
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -99,7 +107,7 @@ export default function Sidebar() {
                     }`}
                   >
                     <span className="w-6 h-6 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center text-[12px] font-bold">
-                      {ultraMode ? item.ultraIcon : item.icon}
+                      {item.ultraIcon}
                     </span>
                     {sidebarOpen && <span className="truncate">{item.label}</span>}
                   </button>
@@ -121,7 +129,7 @@ export default function Sidebar() {
             }`}
           >
             <span className="w-6 h-6 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center text-[12px] font-bold">
-              {ultraMode ? '⬢' : '△'}
+              ⬢
             </span>
             {sidebarOpen && <span className="flex-1">Ver tienda</span>}
           </a>
@@ -137,7 +145,7 @@ export default function Sidebar() {
               }`}
           >
             <span className="w-6 h-6 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center text-[12px] font-bold">
-              {ultraMode ? '✶' : '◉'}
+              ✶
             </span>
             {sidebarOpen && <span className="flex-1">Ver inicio</span>}
           </a>

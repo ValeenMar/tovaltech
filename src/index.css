@@ -197,7 +197,143 @@
   animation: neonBlink 1.6s steps(2, end) infinite;
 }
 
-.admin-shell.ultra-pro-mode {
+.admin-avatar-led {
+  animation: neonFault 9.5s linear infinite;
+}
+
+.admin-shell.admin-theme-violet {
+  background:
+    radial-gradient(circle at 15% 15%, rgba(139, 92, 246, 0.2), transparent 34%),
+    radial-gradient(circle at 82% 8%, rgba(124, 58, 237, 0.16), transparent 36%),
+    radial-gradient(circle at 92% 92%, rgba(167, 139, 250, 0.14), transparent 28%),
+    linear-gradient(145deg, #15152c 0%, #1b1a38 52%, #111227 100%);
+}
+
+.admin-shell.admin-theme-violet .admin-bg-grid {
+  background-image:
+    linear-gradient(rgba(139, 92, 246, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 92, 246, 0.07) 1px, transparent 1px);
+  opacity: 0.34;
+}
+
+.admin-shell.admin-theme-violet .admin-sidebar {
+  background: linear-gradient(180deg, #1a1c3d 0%, #202248 55%, #191b3d 100%);
+  border-right-color: rgba(167, 139, 250, 0.2);
+}
+
+.admin-shell.admin-theme-violet .admin-surface {
+  background: rgba(34, 28, 58, 0.66);
+  border-color: rgba(167, 139, 250, 0.28);
+  box-shadow:
+    0 20px 45px rgba(0, 0, 0, 0.34),
+    0 0 28px rgba(139, 92, 246, 0.2);
+}
+
+.admin-shell.admin-theme-violet .admin-surface p,
+.admin-shell.admin-theme-violet .admin-surface span,
+.admin-shell.admin-theme-violet .admin-surface input,
+.admin-shell.admin-theme-violet .admin-surface button {
+  color: #e8e1ff;
+}
+
+.admin-shell.admin-theme-violet .admin-surface input::placeholder {
+  color: rgba(232, 225, 255, 0.56);
+}
+
+.admin-shell.admin-theme-violet .sidebar-item.active {
+  background: linear-gradient(120deg, rgba(139, 92, 246, 0.33), rgba(124, 58, 237, 0.2));
+  box-shadow: 0 0 18px rgba(139, 92, 246, 0.32);
+}
+
+.admin-shell.admin-theme-violet .sidebar-item.active::after {
+  background: linear-gradient(180deg, #c4b5fd, #8b5cf6);
+}
+
+.admin-shell.admin-theme-violet .admin-kbd {
+  border-color: rgba(196, 181, 253, 0.35);
+  background: rgba(139, 92, 246, 0.15);
+}
+
+.admin-shell.admin-theme-violet .text-blue-600,
+.admin-shell.admin-theme-violet .text-blue-700 {
+  color: #b89bff !important;
+}
+
+.admin-shell.admin-theme-violet .bg-blue-600 {
+  background-color: #8b5cf6 !important;
+}
+
+.admin-shell.admin-theme-violet .hover\:bg-blue-700:hover {
+  background-color: #7c3aed !important;
+}
+
+.admin-shell.admin-theme-green {
+  background:
+    radial-gradient(circle at 15% 15%, rgba(16, 185, 129, 0.2), transparent 35%),
+    radial-gradient(circle at 80% 8%, rgba(5, 150, 105, 0.16), transparent 34%),
+    radial-gradient(circle at 90% 92%, rgba(52, 211, 153, 0.14), transparent 28%),
+    linear-gradient(145deg, #0f211f 0%, #132b28 52%, #0b1817 100%);
+}
+
+.admin-shell.admin-theme-green .admin-bg-grid {
+  background-image:
+    linear-gradient(rgba(16, 185, 129, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.07) 1px, transparent 1px);
+  opacity: 0.34;
+}
+
+.admin-shell.admin-theme-green .admin-sidebar {
+  background: linear-gradient(180deg, #0f2a29 0%, #123332 55%, #0d2524 100%);
+  border-right-color: rgba(94, 234, 212, 0.2);
+}
+
+.admin-shell.admin-theme-green .admin-surface {
+  background: rgba(17, 45, 40, 0.66);
+  border-color: rgba(94, 234, 212, 0.28);
+  box-shadow:
+    0 20px 45px rgba(0, 0, 0, 0.34),
+    0 0 28px rgba(16, 185, 129, 0.2);
+}
+
+.admin-shell.admin-theme-green .admin-surface p,
+.admin-shell.admin-theme-green .admin-surface span,
+.admin-shell.admin-theme-green .admin-surface input,
+.admin-shell.admin-theme-green .admin-surface button {
+  color: #d8fff0;
+}
+
+.admin-shell.admin-theme-green .admin-surface input::placeholder {
+  color: rgba(216, 255, 240, 0.56);
+}
+
+.admin-shell.admin-theme-green .sidebar-item.active {
+  background: linear-gradient(120deg, rgba(16, 185, 129, 0.32), rgba(5, 150, 105, 0.22));
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.32);
+}
+
+.admin-shell.admin-theme-green .sidebar-item.active::after {
+  background: linear-gradient(180deg, #86efac, #10b981);
+}
+
+.admin-shell.admin-theme-green .admin-kbd {
+  border-color: rgba(134, 239, 172, 0.35);
+  background: rgba(16, 185, 129, 0.16);
+}
+
+.admin-shell.admin-theme-green .text-blue-600,
+.admin-shell.admin-theme-green .text-blue-700 {
+  color: #39d7a0 !important;
+}
+
+.admin-shell.admin-theme-green .bg-blue-600 {
+  background-color: #10b981 !important;
+}
+
+.admin-shell.admin-theme-green .hover\:bg-blue-700:hover {
+  background-color: #059669 !important;
+}
+
+.admin-shell.admin-theme-red {
   background:
     radial-gradient(circle at 15% 15%, rgba(255, 76, 110, 0.2), transparent 36%),
     radial-gradient(circle at 82% 10%, rgba(255, 22, 72, 0.18), transparent 34%),
@@ -205,14 +341,14 @@
     linear-gradient(145deg, #170a14 0%, #27101c 52%, #11070f 100%);
 }
 
-.admin-shell.ultra-pro-mode .admin-bg-grid {
+.admin-shell.admin-theme-red .admin-bg-grid {
   background-image:
     linear-gradient(rgba(255, 74, 102, 0.09) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 74, 102, 0.08) 1px, transparent 1px);
   opacity: 0.36;
 }
 
-.admin-shell.ultra-pro-mode .admin-sidebar {
+.admin-shell.admin-theme-red .admin-sidebar {
   background: linear-gradient(180deg, #250915 0%, #2f0c1b 55%, #230914 100%);
   border-right-color: rgba(255, 108, 142, 0.22);
   box-shadow:
@@ -220,7 +356,7 @@
     inset -1px 0 0 rgba(255, 131, 157, 0.08);
 }
 
-.admin-shell.ultra-pro-mode .admin-surface {
+.admin-shell.admin-theme-red .admin-surface {
   background: rgba(35, 14, 23, 0.68);
   border-color: rgba(255, 108, 142, 0.32);
   box-shadow:
@@ -228,45 +364,45 @@
     0 0 28px rgba(255, 74, 102, 0.25);
 }
 
-.admin-shell.ultra-pro-mode .admin-surface p,
-.admin-shell.ultra-pro-mode .admin-surface span,
-.admin-shell.ultra-pro-mode .admin-surface input,
-.admin-shell.ultra-pro-mode .admin-surface button {
+.admin-shell.admin-theme-red .admin-surface p,
+.admin-shell.admin-theme-red .admin-surface span,
+.admin-shell.admin-theme-red .admin-surface input,
+.admin-shell.admin-theme-red .admin-surface button {
   color: #ffdfe7;
 }
 
-.admin-shell.ultra-pro-mode .admin-surface input::placeholder {
+.admin-shell.admin-theme-red .admin-surface input::placeholder {
   color: rgba(255, 223, 231, 0.58);
 }
 
-.admin-shell.ultra-pro-mode .sidebar-item.active {
+.admin-shell.admin-theme-red .sidebar-item.active {
   background: linear-gradient(120deg, rgba(255, 75, 114, 0.32), rgba(255, 38, 82, 0.2));
   box-shadow: 0 0 18px rgba(255, 74, 102, 0.35);
 }
 
-.admin-shell.ultra-pro-mode .sidebar-item.active::after {
+.admin-shell.admin-theme-red .sidebar-item.active::after {
   background: linear-gradient(180deg, #ff8aa9, #ff375f);
 }
 
-.admin-shell.ultra-pro-mode .sidebar-item:hover {
+.admin-shell.admin-theme-red .sidebar-item:hover {
   color: #ffdbe5;
 }
 
-.admin-shell.ultra-pro-mode .admin-kbd {
+.admin-shell.admin-theme-red .admin-kbd {
   border-color: rgba(255, 131, 157, 0.35);
   background: rgba(255, 74, 102, 0.14);
 }
 
-.admin-shell.ultra-pro-mode .text-blue-600,
-.admin-shell.ultra-pro-mode .text-blue-700 {
+.admin-shell.admin-theme-red .text-blue-600,
+.admin-shell.admin-theme-red .text-blue-700 {
   color: #ff6e8e !important;
 }
 
-.admin-shell.ultra-pro-mode .bg-blue-600 {
+.admin-shell.admin-theme-red .bg-blue-600 {
   background-color: #ff3f67 !important;
 }
 
-.admin-shell.ultra-pro-mode .hover\:bg-blue-700:hover {
+.admin-shell.admin-theme-red .hover\:bg-blue-700:hover {
   background-color: #e72e56 !important;
 }
 
@@ -352,5 +488,32 @@
   50%, 55% {
     opacity: 0.72;
     filter: drop-shadow(0 0 2px rgba(255, 74, 102, 0.2));
+  }
+}
+
+@keyframes neonFault {
+  0%, 74%, 78%, 100% {
+    opacity: 1;
+    filter: brightness(1) saturate(1);
+  }
+  75% {
+    opacity: 0.86;
+    filter: brightness(0.92) saturate(0.8);
+  }
+  76% {
+    opacity: 1;
+    filter: brightness(1.08) saturate(1.2);
+  }
+  77% {
+    opacity: 0.78;
+    filter: brightness(0.86) saturate(0.7);
+  }
+  90% {
+    opacity: 0.94;
+    filter: brightness(0.95);
+  }
+  90.5% {
+    opacity: 1;
+    filter: brightness(1.08);
   }
 }

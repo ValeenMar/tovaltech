@@ -525,18 +525,21 @@ function SubcategoryRow({ cat, allCategories, globalMarkup, pendingValue, onPend
           pendingValue={pendingValue}
           onPendingChange={onPendingChange}
         />
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
           <button onClick={() => setShowAssign(true)}
+            title="Mover productos a esta subcategoría"
             className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-50 text-green-700
                        hover:bg-green-100 border border-green-200 whitespace-nowrap">
-            📦 Asignar
+            📦 Mover productos
           </button>
           <button onClick={() => setShowEdit(true)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50
-                       border border-transparent hover:border-blue-200 text-sm">✏️</button>
+            title="Editar nombre o categoría padre"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-blue-700 bg-blue-50
+                       hover:bg-blue-100 border border-blue-200 whitespace-nowrap">✏️ Editar</button>
           <button onClick={() => setShowDelete(true)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50
-                       border border-transparent hover:border-red-200 text-sm">🗑️</button>
+            title="Eliminar esta subcategoría"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-700 bg-red-50
+                       hover:bg-red-100 border border-red-200 whitespace-nowrap">🗑️ Eliminar</button>
         </div>
       </div>
 
@@ -590,25 +593,29 @@ function CategoryRow({ cat, allCategories, globalMarkup, pendingChanges, onPendi
           pendingValue={pendingChanges[cat.id]}
           onPendingChange={onPendingChange}
         />
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
           {cat.product_count > 0 && (
             <button onClick={() => onViewProducts(cat.name)}
+              title="Abrir catálogo filtrado por esta categoría"
               className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-indigo-50 text-indigo-700
                          hover:bg-indigo-100 border border-indigo-200 whitespace-nowrap">
-              🔍 Ver
+              🔍 Ver productos
             </button>
           )}
           <button onClick={() => setShowAssign(true)}
+            title="Mover productos a esta categoría"
             className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-50 text-green-700
                        hover:bg-green-100 border border-green-200 whitespace-nowrap">
-            📦 Asignar
+            📦 Mover productos
           </button>
           <button onClick={() => setShowEdit(true)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50
-                       border border-transparent hover:border-blue-200 text-sm">✏️</button>
+            title="Editar nombre o categoría padre"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-blue-700 bg-blue-50
+                       hover:bg-blue-100 border border-blue-200 whitespace-nowrap">✏️ Editar</button>
           <button onClick={() => setShowDelete(true)}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50
-                       border border-transparent hover:border-red-200 text-sm">🗑️</button>
+            title="Eliminar esta categoría"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-700 bg-red-50
+                       hover:bg-red-100 border border-red-200 whitespace-nowrap">🗑️ Eliminar</button>
         </div>
       </div>
 
@@ -940,15 +947,22 @@ export default function Categories() {
         </button>
       </div>
 
-      {/* Info jerarquía */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-5
-                      flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-blue-700">
-        <span className="font-semibold">💹 Jerarquía markup:</span>
-        <span>1. Producto individual (★)</span>
-        <span>2. Categoría / Subcategoría (★)</span>
-        <span>3. Global — fallback final</span>
-        <span className="text-blue-500 italic">Click en el markup para editar · Aplicar para confirmar los cambios.</span>
-        <span className="ml-auto text-indigo-500 font-medium">▸ Las subcategorías aparecen como filtros en la tienda</span>
+      {/* Guía rápida */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4 text-xs text-blue-700">
+        <p className="font-semibold mb-1">💡 Cómo usar esta sección (rápido)</p>
+        <p>
+          1) Tocá el <strong>markup</strong> de una fila para editarlo. 2) Usá <strong>Aplicar</strong> para guardar cambios pendientes.
+          3) <strong>Ver productos</strong> abre el catálogo filtrado. 4) <strong>Mover productos</strong> reasigna ítems a la categoría elegida.
+        </p>
+      </div>
+
+      <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 mb-5
+                      flex flex-wrap items-center gap-x-6 gap-y-1 text-xs text-indigo-700">
+        <span className="font-semibold">📐 Prioridad de markup:</span>
+        <span>1. Producto (★)</span>
+        <span>2. Categoría/Subcategoría (★)</span>
+        <span>3. Global</span>
+        <span className="ml-auto text-indigo-500 font-medium">Las subcategorías también aparecen como filtros en tienda</span>
       </div>
 
       {/* Panel markup global */}
@@ -1012,8 +1026,8 @@ export default function Categories() {
                           bg-gray-50 border-b border-gray-200
                           text-[11px] font-semibold text-gray-400 uppercase tracking-wider gap-4">
             <span>Categoría / Subcategoría</span>
-            <span>Prods.</span>
-            <span>Markup (click = editar)</span>
+            <span>Productos</span>
+            <span>Markup (tocá para editar)</span>
             <span>Acciones</span>
           </div>
 

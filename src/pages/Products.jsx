@@ -39,6 +39,169 @@ function AdminModalPortal({ children }) {
   return createPortal(children, document.body)
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function buildPriceListExcel({ items, globalMarkup, categoryFilter, searchFilter }) {
+  const generatedAt = new Date()
+  const generatedAtLabel = generatedAt.toLocaleString('es-AR')
+
+  const rows = items.map((p, index) => {
+    const displayPriceUsd = Number.isFinite(Number(p.price_usd)) ? Number(p.price_usd).toFixed(2) : ''
+    const displayPriceArs = Number.isFinite(Number(p.price_ars)) ? Number(p.price_ars).toFixed(0) : ''
+    const stock = Number.isFinite(Number(p.stock)) ? Number(p.stock) : 0
+    const markup = p.markup_pct != null ? `${p.markup_pct}%` : `Global (${globalMarkup ?? 0}%)`
+    const status = p.active === false || p.active === 0 ? 'Oculto' : 'Visible'
+    const featured = p.featured === true || p.featured === 1 ? 'Si' : 'No'
+
+    return `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(p.sku)}</td>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${escapeHtml(p.brand)}</td>
+        <td>${escapeHtml(p.category)}</td>
+        <td class="num">${stock}</td>
+        <td class="num">${displayPriceUsd}</td>
+        <td class="num">${displayPriceArs}</td>
+        <td>${escapeHtml(markup)}</td>
+        <td>${status}</td>
+        <td>${featured}</td>
+      </tr>
+    `
+  }).join('')
+
+  return `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office"
+          xmlns:x="urn:schemas-microsoft-com:office:excel"
+          xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="ProgId" content="Excel.Sheet" />
+        <style>
+          body { font-family: Segoe UI, Arial, sans-serif; color: #0f172a; }
+          .title { font-size: 22px; font-weight: 800; color: #0b3a7e; margin-bottom: 2px; }
+          .subtitle { font-size: 12px; color: #475569; margin-bottom: 18px; }
+          .meta { margin-bottom: 16px; border-collapse: collapse; }
+          .meta td { padding: 6px 10px; border: 1px solid #dbeafe; font-size: 12px; }
+          .meta .k { background: #eff6ff; font-weight: 700; color: #1d4ed8; width: 190px; }
+          .prices { border-collapse: collapse; width: 100%; }
+          .prices th {
+            background: linear-gradient(180deg, #1d4ed8, #1e40af);
+            color: #fff;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+            padding: 9px 8px;
+            border: 1px solid #1e3a8a;
+          }
+          .prices td {
+            border: 1px solid #cbd5e1;
+            padding: 8px 7px;
+            font-size: 11px;
+            vertical-align: middle;
+          }
+          .prices tr:nth-child(even) td { background: #f8fafc; }
+          .prices tr:hover td { background: #e0f2fe; }
+          .num { text-align: right; font-variant-numeric: tabular-nums; }
+        </style>
+      </head>
+      <body>
+        <div class="title">TovalTech - Lista de Precios</div>
+        <div class="subtitle">Generada desde panel admin el ${escapeHtml(generatedAtLabel)}</div>
+
+        <table class="meta">
+          <tr><td class="k">Cantidad de productos</td><td>${items.length}</td></tr>
+          <tr><td class="k">Markup global</td><td>${globalMarkup ?? '—'}%</td></tr>
+          <tr><td class="k">Filtro categoría</td><td>${escapeHtml(categoryFilter || 'Todas')}</td></tr>
+          <tr><td class="k">Filtro búsqueda</td><td>${escapeHtml(searchFilter || 'Sin filtro')}</td></tr>
+        </table>
+
+        <table class="prices">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>SKU</th>
+              <th>Producto</th>
+              <th>Marca</th>
+              <th>Categoría</th>
+              <th>Stock</th>
+              <th>Precio USD</th>
+              <th>Precio ARS</th>
+              <th>Markup</th>
+              <th>Estado</th>
+              <th>Destacado</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </body>
+    </html>
+  `
+}
+
+async function fetchAllProductsForExport({ buscar, categoria }) {
+  const all = []
+  let offset = 0
+  let total = 0
+  let page = 0
+  const PAGE_SIZE = 500
+
+  do {
+    page += 1
+    const params = new URLSearchParams({
+      admin: '1',
+      limit: String(PAGE_SIZE),
+      offset: String(offset),
+    })
+    if (buscar) params.set('buscar', buscar)
+    if (categoria) params.set('categoria', categoria)
+
+    const res = await fetch(`/api/products?${params.toString()}`, {
+      credentials: 'include',
+    })
+
+    const contentType = res.headers.get('content-type') || ''
+    if (!res.ok || !contentType.includes('application/json')) {
+      throw new Error(await readApiError(res, `No se pudo exportar (página ${page}).`))
+    }
+
+    const data = await res.json()
+    const items = Array.isArray(data.items) ? data.items : []
+    total = Number(data.total || 0)
+    all.push(...items)
+    offset += items.length
+    if (items.length === 0) break
+  } while (all.length < total)
+
+  return all
+}
+
+function downloadExcel(content, filename) {
+  const blob = new Blob([`\ufeff${content}`], { type: 'application/vnd.ms-excel;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 500)
+}
+
+function buildExportFilename() {
+  const now = new Date()
+  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
+  const time = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`
+  return `tovaltech_lista_precios_${date}_${time}.xls`
+}
+
 // ── Hook: carga categorías ────────────────────────────────────────────────────
 function useCategories() {
   const [categories, setCategories] = useState([])
@@ -311,90 +474,6 @@ function BulkMarkupModal({ category, globalMarkup, onClose }) {
   )
 }
 
-// ── Modal: markup masivo para productos seleccionados ─────────────────────────
-function BulkSelectionModal({ selected, globalMarkup, onClose }) {
-  const [value,  setValue]  = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saved,  setSaved]  = useState(false)
-  const [error,  setError]  = useState(null)
-
-  const handleSave = async () => {
-    const markup = value === '' ? null : parseFloat(value)
-    if (markup !== null && (!Number.isFinite(markup) || markup < 0 || markup > 500)) {
-      setError('Ingresá un número entre 0 y 500'); return
-    }
-    setSaving(true); setError(null)
-    try {
-      // Aplica el markup a cada producto seleccionado en paralelo
-      await Promise.all(
-        selected.map(async (id) => {
-          const res = await fetch(`/api/products/${id}/markup`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ markup_pct: markup }),
-          })
-          const contentType = res.headers.get('content-type') || ''
-          if (!res.ok || !contentType.includes('application/json')) {
-            throw new Error(await readApiError(res, `Error al guardar producto ${id}`))
-          }
-        })
-      )
-      setSaved(true)
-      setTimeout(() => onClose(true), 1200)
-    } catch (e) {
-      setError(e?.message || 'Error al guardar uno o más productos')
-      setSaving(false)
-    }
-  }
-
-  return (
-    <AdminModalPortal>
-      <div className="fixed inset-0 z-[120] bg-slate-950/30 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
-           onClick={() => onClose(false)}>
-        <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl my-8"
-             onClick={e => e.stopPropagation()}>
-        <h3 className="font-bold text-gray-800 mb-1">
-          💹 Markup masivo — <span className="text-blue-600">{selected.length} productos</span>
-        </h3>
-        <p className="text-xs text-gray-500 mb-4">
-          Aplica el mismo markup a los {selected.length} productos seleccionados.
-          Dejá vacío para volver al markup global ({globalMarkup ?? '—'}%).
-        </p>
-
-        <div className="flex items-center gap-2 mb-4">
-          <input
-            type="number" min="0" max="500" step="0.5"
-            placeholder={`Global (${globalMarkup ?? 0}%)`}
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center
-                       font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
-            autoFocus
-          />
-          <span className="text-lg font-bold text-gray-500">%</span>
-        </div>
-
-        {error && <p className="text-xs text-red-500 mb-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-        {saved  && <p className="text-xs text-green-600 mb-3 bg-green-50 px-3 py-2 rounded-lg">✅ Guardado en {selected.length} productos</p>}
-
-        <div className="flex gap-2">
-          <button onClick={() => onClose(false)}
-            className="flex-1 px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium hover:bg-gray-50">
-            Cancelar
-          </button>
-          <button onClick={handleSave} disabled={saving || saved}
-            className="flex-1 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold
-                       hover:bg-blue-700 disabled:opacity-50">
-            {saving ? 'Guardando...' : `Aplicar a ${selected.length} productos`}
-          </button>
-        </div>
-        </div>
-      </div>
-    </AdminModalPortal>
-  )
-}
-
 // ── Toggle visibilidad ────────────────────────────────────────────────────────
 function VisibilityToggle({ product, onToggled }) {
   const [loading, setLoading] = useState(false)
@@ -478,23 +557,12 @@ function FeaturedToggle({ product, onToggled }) {
 }
 
 // ── Vista LISTA ───────────────────────────────────────────────────────────────
-function ListView({ products, globalMarkup, selected, onSelect, onSelectAll, onMarkup, onReload }) {
-  const allSelected = products.length > 0 && products.every(p => selected.has(p.id))
-
+function ListView({ products, globalMarkup, onMarkup, onReload }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="grid grid-cols-[32px_1fr_110px_70px_105px_105px_100px_80px_72px_60px] px-4 py-2.5
+      <div className="grid grid-cols-[1fr_120px_70px_105px_105px_100px_80px_72px_60px] px-4 py-2.5
                       bg-gray-50 border-b border-gray-200
                       text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-        {/* Checkbox seleccionar todos */}
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            checked={allSelected}
-            onChange={() => onSelectAll(allSelected ? [] : products.map(p => p.id))}
-            className="w-3.5 h-3.5 rounded cursor-pointer"
-          />
-        </div>
         <span>Producto</span>
         <span>Proveedor / Cat.</span>
         <span className="text-center">Stock</span>
@@ -512,27 +580,14 @@ function ListView({ products, globalMarkup, selected, onSelect, onSelectAll, onM
         const markupPct = p.markup_pct != null ? p.markup_pct : globalMarkup ?? 0
         const isCustom  = p.markup_pct != null
         const isActive  = p.active !== false && p.active !== 0
-        const isChecked = selected.has(p.id)
 
         return (
           <div key={p.id}
-            className={`grid grid-cols-[32px_1fr_110px_70px_105px_105px_100px_80px_72px_60px]
+            className={`grid grid-cols-[1fr_120px_70px_105px_105px_100px_80px_72px_60px]
                         px-4 py-3 text-sm border-b border-gray-100 last:border-0 items-center gap-1
-                        ${isChecked ? 'bg-blue-50/60' :
-                          !isActive ? 'opacity-50 bg-gray-50/80' :
+                        ${!isActive ? 'opacity-50 bg-gray-50/80' :
                           i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
 
-            {/* Checkbox individual */}
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                checked={isChecked}
-                onChange={() => onSelect(p.id)}
-                className="w-3.5 h-3.5 rounded cursor-pointer"
-              />
-            </div>
-
-            {/* Nombre */}
             <div className="min-w-0">
               <button
                 type="button"
@@ -600,7 +655,7 @@ function ListView({ products, globalMarkup, selected, onSelect, onSelectAll, onM
 }
 
 // ── Vista GRILLA ──────────────────────────────────────────────────────────────
-function GridView({ products, globalMarkup, selected, onSelect, onMarkup, onReload }) {
+function GridView({ products, globalMarkup, onMarkup, onReload }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
       {products.map(p => {
@@ -608,13 +663,11 @@ function GridView({ products, globalMarkup, selected, onSelect, onMarkup, onRelo
         const saleArs   = p.price_ars
         const hasCustom = p.markup_pct != null
         const isActive  = p.active !== false && p.active !== 0
-        const isChecked = selected.has(p.id)
 
         return (
           <div key={p.id}
             className={`bg-white rounded-xl border overflow-hidden hover:shadow-md transition-all group relative cursor-pointer
-              ${isChecked ? 'border-blue-400 ring-2 ring-blue-200' :
-                isActive ? 'border-gray-200' : 'border-red-200 opacity-60'}`}
+              ${isActive ? 'border-gray-200' : 'border-red-200 opacity-60'}`}
             onClick={() => onMarkup(p)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
@@ -626,17 +679,6 @@ function GridView({ products, globalMarkup, selected, onSelect, onMarkup, onRelo
             tabIndex={0}
             title="Tocá para editar producto"
           >
-
-            {/* Checkbox en esquina */}
-            <div className="absolute top-2 left-2 z-10">
-              <input
-                type="checkbox"
-                checked={isChecked}
-                onChange={() => onSelect(p.id)}
-                className="w-4 h-4 rounded cursor-pointer shadow"
-                onClick={e => e.stopPropagation()}
-              />
-            </div>
 
             <div className="h-28 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
               {p.image_url
@@ -702,8 +744,8 @@ export default function Products() {
   const [categoryFilter,  setCategoryFilter]  = useState('')
   const [markupModal,     setMarkupModal]     = useState(null)
   const [bulkModal,       setBulkModal]       = useState(null)
-  const [bulkSelModal,    setBulkSelModal]    = useState(false)
-  const [selected,        setSelected]        = useState(new Set())
+  const [exporting,       setExporting]       = useState(false)
+  const [exportFeedback,  setExportFeedback]  = useState(null)
   const [vista,           setVista]           = useState('lista')
 
   // ── Leer búsqueda desde URL (?q=) — para que el buscador del Topbar funcione
@@ -747,21 +789,38 @@ export default function Products() {
     ? categories.find(c => c.name === categoryFilter)
     : null
 
-  // ── Handlers de selección ─────────────────────────────────────────────────
-  const handleSelect = useCallback((id) => {
-    setSelected(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
+  const handleExportPriceList = useCallback(async () => {
+    setExporting(true)
+    setExportFeedback(null)
+    try {
+      const allItems = await fetchAllProductsForExport({
+        buscar: debouncedSearch || undefined,
+        categoria: categoryFilter || undefined,
+      })
+      if (!allItems.length) {
+        throw new Error('No hay productos para exportar con los filtros actuales.')
+      }
 
-  const handleSelectAll = useCallback((ids) => {
-    setSelected(new Set(ids))
-  }, [])
-
-  const clearSelection = () => setSelected(new Set())
+      const html = buildPriceListExcel({
+        items: allItems,
+        globalMarkup,
+        categoryFilter,
+        searchFilter: debouncedSearch,
+      })
+      downloadExcel(html, buildExportFilename())
+      setExportFeedback({
+        ok: true,
+        message: `Lista exportada con ${allItems.length} productos.`,
+      })
+    } catch (e) {
+      setExportFeedback({
+        ok: false,
+        message: e?.message || 'No se pudo exportar la lista.',
+      })
+    } finally {
+      setExporting(false)
+    }
+  }, [categoryFilter, debouncedSearch, globalMarkup])
 
   return (
     <>
@@ -783,39 +842,29 @@ export default function Products() {
             </p>
           )}
         </div>
-        <div className="flex bg-gray-100 rounded-lg p-0.5">
-          <button onClick={() => setVista('lista')}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all
-              ${vista === 'lista' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            ☰ Lista
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportPriceList}
+            disabled={loading || exporting}
+            className="px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-sm font-semibold hover:bg-emerald-100 disabled:opacity-50"
+            title="Exportar lista de precios en formato Excel"
+          >
+            {exporting ? 'Exportando...' : '📊 Exportar Excel'}
           </button>
-          <button onClick={() => setVista('grilla')}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all
-              ${vista === 'grilla' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-            ⊞ Grilla
-          </button>
+          <div className="flex bg-gray-100 rounded-lg p-0.5">
+            <button onClick={() => setVista('lista')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all
+                ${vista === 'lista' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              ☰ Lista
+            </button>
+            <button onClick={() => setVista('grilla')}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all
+                ${vista === 'grilla' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              ⊞ Grilla
+            </button>
+          </div>
         </div>
       </div>
-
-      {/* ── Barra de selección masiva (aparece cuando hay productos seleccionados) */}
-      {selected.size > 0 && (
-        <div className="flex items-center gap-3 mb-4 px-4 py-3 bg-blue-600 rounded-xl text-white text-sm font-medium
-                        shadow-lg shadow-blue-200">
-          <span className="flex-1">
-            ✅ <strong>{selected.size}</strong> producto{selected.size !== 1 ? 's' : ''} seleccionado{selected.size !== 1 ? 's' : ''}
-          </span>
-          <button
-            onClick={() => setBulkSelModal(true)}
-            className="px-3 py-1.5 bg-white text-blue-600 rounded-lg font-semibold text-xs hover:bg-blue-50">
-            💹 Aplicar markup
-          </button>
-          <button
-            onClick={clearSelection}
-            className="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs hover:bg-blue-400">
-            Deseleccionar todo
-          </button>
-        </div>
-      )}
 
       {/* ── Leyenda ───────────────────────────────────────────────────────── */}
       {vista === 'lista' && !loading && (
@@ -829,9 +878,16 @@ export default function Products() {
           <span className="flex items-center gap-1.5">
             <span>🚫</span> Oculto — click para mostrar
           </span>
-          <span className="flex items-center gap-1.5">
-            <input type="checkbox" readOnly className="w-3 h-3" /> Seleccioná para markup masivo
-          </span>
+        </div>
+      )}
+
+      {exportFeedback && (
+        <div className={`mb-4 rounded-xl px-4 py-3 text-sm border ${
+          exportFeedback.ok
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            : 'bg-rose-50 border-rose-200 text-rose-700'
+        }`}>
+          {exportFeedback.ok ? '✅ ' : '❌ '}{exportFeedback.message}
         </div>
       )}
 
@@ -910,12 +966,10 @@ export default function Products() {
         vista === 'lista'
           ? <ListView
               products={products} globalMarkup={globalMarkup}
-              selected={selected} onSelect={handleSelect} onSelectAll={handleSelectAll}
               onMarkup={setMarkupModal} onReload={reload}
             />
           : <GridView
               products={products} globalMarkup={globalMarkup}
-              selected={selected} onSelect={handleSelect}
               onMarkup={setMarkupModal} onReload={reload}
             />
       )}
@@ -937,16 +991,6 @@ export default function Products() {
         />
       )}
 
-      {bulkSelModal && (
-        <BulkSelectionModal
-          selected={[...selected]}
-          globalMarkup={globalMarkup}
-          onClose={(saved) => {
-            setBulkSelModal(false)
-            if (saved) { clearSelection(); reload() }
-          }}
-        />
-      )}
     </>
   )
 }
