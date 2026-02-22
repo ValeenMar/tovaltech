@@ -4,6 +4,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import { useAdminProducts } from '../hooks/useAdminProducts'
 import { useApp } from '../context/AppContext'
 
@@ -31,6 +32,11 @@ async function readApiError(res, fallback) {
     // ignore
   }
   return fallback
+}
+
+function AdminModalPortal({ children }) {
+  if (typeof document === 'undefined') return null
+  return createPortal(children, document.body)
 }
 
 // ── Hook: carga categorías ────────────────────────────────────────────────────
@@ -104,10 +110,11 @@ function MarkupModal({ product, globalMarkup, onClose }) {
   ]
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-950/30 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
-         onClick={() => onClose(false)}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg my-8"
-           onClick={e => e.stopPropagation()}>
+    <AdminModalPortal>
+      <div className="fixed inset-0 z-[120] bg-slate-950/30 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+           onClick={() => onClose(false)}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg my-8"
+             onClick={e => e.stopPropagation()}>
 
         <div className="px-6 pt-5 pb-3 border-b border-gray-100">
           <p className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold mb-0.5">Editar producto</p>
@@ -209,8 +216,9 @@ function MarkupModal({ product, globalMarkup, onClose }) {
             </button>
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </AdminModalPortal>
   )
 }
 
@@ -246,10 +254,11 @@ function BulkMarkupModal({ category, globalMarkup, onClose }) {
   const effectivePct = value === '' ? (globalMarkup ?? 0) : (parseFloat(value) || 0)
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-950/30 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
-         onClick={() => onClose(false)}>
-      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl my-8"
-           onClick={e => e.stopPropagation()}>
+    <AdminModalPortal>
+      <div className="fixed inset-0 z-[120] bg-slate-950/30 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+           onClick={() => onClose(false)}>
+        <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl my-8"
+             onClick={e => e.stopPropagation()}>
         <h3 className="font-bold text-gray-800 mb-1">
           💹 Markup de categoría: <span className="text-blue-600">{category.name}</span>
         </h3>
@@ -296,8 +305,9 @@ function BulkMarkupModal({ category, globalMarkup, onClose }) {
             {saving ? 'Guardando...' : 'Aplicar a categoría'}
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </AdminModalPortal>
   )
 }
 
@@ -339,10 +349,11 @@ function BulkSelectionModal({ selected, globalMarkup, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-950/30 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
-         onClick={() => onClose(false)}>
-      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl my-8"
-           onClick={e => e.stopPropagation()}>
+    <AdminModalPortal>
+      <div className="fixed inset-0 z-[120] bg-slate-950/30 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+           onClick={() => onClose(false)}>
+        <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl my-8"
+             onClick={e => e.stopPropagation()}>
         <h3 className="font-bold text-gray-800 mb-1">
           💹 Markup masivo — <span className="text-blue-600">{selected.length} productos</span>
         </h3>
@@ -378,8 +389,9 @@ function BulkSelectionModal({ selected, globalMarkup, onClose }) {
             {saving ? 'Guardando...' : `Aplicar a ${selected.length} productos`}
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </AdminModalPortal>
   )
 }
 
