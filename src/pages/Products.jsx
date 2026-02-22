@@ -659,7 +659,7 @@ export default function Products() {
   const categories = useCategories()
 
   // Debounce búsqueda
-  useMemo(() => {
+  useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300)
     return () => clearTimeout(t)
   }, [search])

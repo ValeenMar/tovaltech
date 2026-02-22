@@ -1,7 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
-import { AppProvider } from './context/AppContext'
 import './index.css'
 
 // ── Warming de Azure Functions ────────────────────────────────────────────────
@@ -15,16 +14,14 @@ function warmApis() {
   // (Lighthouse captura los primeros ~4s). Sigue siendo útil para mantener la
   // Azure Function caliente entre visitas.
   setTimeout(() => {
-    ping('/api/health');
     ping('/api/products?limit=1');
+    ping('/api/banners');
   }, 5000);
 }
 warmApis();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <AppProvider>
-      <App />
-    </AppProvider>
+    <App />
   </React.StrictMode>
 )

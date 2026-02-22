@@ -3,7 +3,7 @@
 // Al clickear un padre se expande/colapsa y filtra por todos sus hijos.
 // Al clickear un hijo filtra solo ese hijo.
 
-import { useState, useMemo, useCallback, memo } from 'react';
+import { useState, useMemo, useCallback, useEffect, memo } from 'react';
 import { useSEO } from '../../hooks/useSEO';
 import ProductCard from '../../components/store/ProductCard';
 import { useProducts } from '../../hooks/useProducts';
@@ -40,7 +40,9 @@ function ParentCategoryItem({ cat, activeCategory, onCategoryChange, onSubcatCha
 
   // Si una categoría hija se activa externamente, aseguramos que el padre esté abierto
   // Pero NO forzamos open cuando isActive — así se puede colapsar aunque esté seleccionado
-  if (childIsActive && !open) setOpen(true);
+  useEffect(() => {
+    if (childIsActive) setOpen(true);
+  }, [childIsActive]);
 
   const handleClick = () => {
     if (hasChildren) {

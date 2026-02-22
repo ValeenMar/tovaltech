@@ -7,20 +7,38 @@
 import sql from 'mssql';
 import fetch from 'node-fetch';
 
-// ── Configuración DB (igual que en local.settings.json) ──────────────────────
-const DB_CONFIG = {
-  server:   'tovaltech-db.database.windows.net',
-  database: 'free-sql-db-4388942',
-  user:     'tovaltech_app',
-  password: 'Dra20044196',
-  port:     1433,
-  options: {
-    encrypt:                true,
-    trustServerCertificate: false,
-    connectTimeout:         30000,
-    requestTimeout:         30000,
-  },
-};
+// ── Configuración DB (desde variables de entorno) ────────────────────────────
+// Requeridas: DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD
+// Opcional:   DB_PORT (default 1433)
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value || !String(value).trim()) {
+    throw new Error(`Falta variable de entorno: ${name}`);
+  }
+  return value;
+}
+
+function getDbConfig() {
+  const portRaw = process.env.DB_PORT || '1433';
+  const port = parseInt(portRaw, 10);
+  if (!Number.isFinite(port)) {
+    throw new Error(`DB_PORT inválido: ${portRaw}`);
+  }
+
+  return {
+    server:   requireEnv('DB_SERVER'),
+    database: requireEnv('DB_NAME'),
+    user:     requireEnv('DB_USER'),
+    password: requireEnv('DB_PASSWORD'),
+    port,
+    options: {
+      encrypt:                true,
+      trustServerCertificate: false,
+      connectTimeout:         30000,
+      requestTimeout:         30000,
+    },
+  };
+}
 
 // ── Configuración Ollama ─────────────────────────────────────────────────────
 const OLLAMA_URL   = 'http://localhost:11434/api/generate';
@@ -119,7 +137,7 @@ async function main() {
   console.log('\n🔗 Conectando a Azure SQL...');
   let pool;
   try {
-    pool = await sql.connect(DB_CONFIG);
+    pool = await sql.connect(getDbConfig());
     console.log('   ✅ Conectado a la base de datos');
   } catch (err) {
     console.error(`   ❌ Error de conexión: ${err.message}`);

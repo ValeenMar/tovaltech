@@ -4,6 +4,24 @@
 // Admin (?admin=1): ve todos sin filtros
 
 const connectDB = require('../db');
+const HEADERS = { 'content-type': 'application/json' };
+
+function getClientPrincipal(req) {
+  try {
+    const encoded = req.headers?.['x-ms-client-principal'];
+    if (!encoded) return null;
+    const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+    return JSON.parse(decoded);
+  } catch {
+    return null;
+  }
+}
+
+function hasAdminRole(req) {
+  const principal = getClientPrincipal(req);
+  const roles = principal?.userRoles;
+  return Array.isArray(roles) && roles.includes('admin');
+}
 
 function toInt(v, fallback) {
   const n = parseInt(String(v ?? ''), 10);
@@ -75,7 +93,13 @@ module.exports = async function (context, req) {
   try {
     const pool = await connectDB();
 
-    const isAdmin   = req.query.admin === '1';
+    const wantsAdmin = req.query.admin === '1';
+    const isAdmin    = wantsAdmin && hasAdminRole(req);
+    if (wantsAdmin && !isAdmin) {
+      context.res = { status: 403, headers: HEADERS, body: { error: 'forbidden' } };
+      return;
+    }
+
     const categoria  = (req.query.categoria  || '').trim();
     const subcateg   = (req.query.subcategoria || '').trim();
     // hijos: subcategorías del padre seleccionado (separadas por coma)
@@ -156,21 +180,26 @@ module.exports = async function (context, req) {
       const price_ars_sale = Math.round((p.price_ars ?? 0) * multiplier);
       const price_usd_sale = Math.round((p.price_usd ?? 0) * multiplier * 100) / 100;
 
-      return {
+      const mapped = {
         ...p,
         price_ars:      price_ars_sale,
         price_usd:      price_usd_sale,
-        price_ars_cost: p.price_ars,
-        price_usd_cost: p.price_usd,
         markup_applied: Math.round(effectiveMarkup * 100 * 10) / 10,
         markup_source:  markupSource,
         active:         p.active !== 0, // normalizar a boolean para el frontend
       };
+
+      if (isAdmin) {
+        mapped.price_ars_cost = p.price_ars;
+        mapped.price_usd_cost = p.price_usd;
+      }
+
+      return mapped;
     });
 
     context.res = {
       status: 200,
-      headers: { 'content-type': 'application/json' },
+      headers: HEADERS,
       body: { items: products, total, limit, offset, global_markup_pct: Math.round(globalMarkup * 100) },
     };
 
@@ -178,7 +207,7 @@ module.exports = async function (context, req) {
     context.log.error('products_failed', err);
     context.res = {
       status: 500,
-      headers: { 'content-type': 'application/json' },
+      headers: HEADERS,
       body: { error: 'products_failed', message: err.message },
     };
   }
