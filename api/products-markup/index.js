@@ -4,10 +4,17 @@
 // Body: { markup_pct, active, featured, name, description } — cualquiera o todos
 
 const connectDB = require('../db');
+const { requireAdmin } = require('../_shared/require-admin');
 const headers = { 'content-type': 'application/json' };
 
 module.exports = async function (context, req) {
   try {
+    const { isAdmin } = requireAdmin(req);
+    if (!isAdmin) {
+      context.res = { status: 403, headers, body: { error: 'forbidden' } };
+      return;
+    }
+
     const pool = await connectDB();
     const id   = parseInt(context.bindingData.id, 10);
     const body = req.body || {};

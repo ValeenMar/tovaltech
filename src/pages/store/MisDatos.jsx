@@ -11,6 +11,12 @@ const STATUS_UI = {
   delivered: { label: 'Entregado', className: 'bg-emerald-100 text-emerald-700' },
   cancelled: { label: 'Cancelado', className: 'bg-rose-100 text-rose-700' },
 };
+const ORDER_STEPS = [
+  { id: 'pending', label: 'Recibido' },
+  { id: 'paid', label: 'Pagado' },
+  { id: 'shipped', label: 'En camino' },
+  { id: 'delivered', label: 'Entregado' },
+];
 
 const fmtARS = (n) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n ?? 0);
@@ -18,8 +24,15 @@ const fmtARS = (n) =>
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
+function getStatusStep(status) {
+  if (status === 'cancelled') return -1;
+  const idx = ORDER_STEPS.findIndex((step) => step.id === status);
+  return idx >= 0 ? idx : 0;
+}
+
 function OrderCard({ order }) {
   const status = STATUS_UI[order.status] || STATUS_UI.pending;
+  const stepIndex = getStatusStep(order.status);
   const items = Array.isArray(order.items) ? order.items : [];
   const visibleItems = items.filter((it) => String(it.id || '').toLowerCase() !== 'shipping');
   const units = visibleItems.reduce((acc, item) => acc + Number(item.quantity || 0), 0);
@@ -55,6 +68,36 @@ function OrderCard({ order }) {
           <p className="text-xs text-slate-400">+{visibleItems.length - 4} producto(s) más</p>
         )}
       </div>
+
+      {stepIndex === -1 ? (
+        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          Este pedido fue cancelado. Si necesitás ayuda, escribinos desde contacto.
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+          <p className="text-[11px] uppercase tracking-[0.13em] text-slate-400 font-semibold mb-2">
+            Seguimiento del pedido
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {ORDER_STEPS.map((step, idx) => {
+              const active = idx <= stepIndex;
+              return (
+                <div key={step.id} className="text-center">
+                  <div className="flex items-center justify-center gap-1.5 mb-1">
+                    <span className={`w-2.5 h-2.5 rounded-full ${active ? 'bg-blue-600' : 'bg-slate-300'}`} />
+                    {idx < ORDER_STEPS.length - 1 && (
+                      <span className={`h-[2px] w-6 sm:w-8 rounded ${idx < stepIndex ? 'bg-blue-600' : 'bg-slate-300'}`} />
+                    )}
+                  </div>
+                  <p className={`text-[10px] font-semibold ${active ? 'text-blue-700' : 'text-slate-400'}`}>
+                    {step.label}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
         <span className="text-sm text-slate-500">Total</span>

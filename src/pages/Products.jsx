@@ -39,19 +39,30 @@ function MarkupModal({ product, globalMarkup, onClose }) {
   const saleArs = Math.round(costArs * (1 + effectiveMarkup / 100))
 
   const handleSave = async () => {
-    const markup = value === '' ? null : parseFloat(value)
-    if (markup !== null && (!Number.isFinite(markup) || markup < 0)) {
-      setError('Valor de markup inválido'); return
+    const payload = {}
+
+    if (tab === 'precio') {
+      const markup = value === '' ? null : parseFloat(value)
+      if (markup !== null && (!Number.isFinite(markup) || markup < 0)) {
+        setError('Valor de markup inválido'); return
+      }
+      payload.markup_pct = markup
     }
-    if (!name.trim()) {
-      setError('El nombre no puede estar vacío'); return
+
+    if (tab === 'contenido') {
+      if (!name.trim()) {
+        setError('El nombre no puede estar vacío'); return
+      }
+      payload.name = name.trim()
+      payload.description = description.trim()
     }
+
     setSaving(true); setError(null)
     try {
       const res = await fetch(`/api/products/${product.id}/markup`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ markup_pct: markup, name: name.trim(), description: description.trim() || null }),
+        body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error()
       setSaved(true)
@@ -477,7 +488,14 @@ function ListView({ products, globalMarkup, selected, onSelect, onSelectAll, onM
 
             {/* Nombre */}
             <div className="min-w-0">
-              <p className="font-medium text-gray-800 truncate text-xs leading-tight">{p.name}</p>
+              <button
+                type="button"
+                onClick={() => onMarkup(p)}
+                className="font-medium text-gray-800 truncate text-xs leading-tight text-left hover:text-blue-700"
+                title="Editar producto"
+              >
+                {p.name}
+              </button>
               {p.brand && <p className="text-[10px] text-gray-400 truncate">{p.brand} · {p.sku}</p>}
             </div>
 
@@ -548,9 +566,20 @@ function GridView({ products, globalMarkup, selected, onSelect, onMarkup, onRelo
 
         return (
           <div key={p.id}
-            className={`bg-white rounded-xl border overflow-hidden hover:shadow-md transition-all group relative
+            className={`bg-white rounded-xl border overflow-hidden hover:shadow-md transition-all group relative cursor-pointer
               ${isChecked ? 'border-blue-400 ring-2 ring-blue-200' :
-                isActive ? 'border-gray-200' : 'border-red-200 opacity-60'}`}>
+                isActive ? 'border-gray-200' : 'border-red-200 opacity-60'}`}
+            onClick={() => onMarkup(p)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onMarkup(p)
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            title="Tocá para editar producto"
+          >
 
             {/* Checkbox en esquina */}
             <div className="absolute top-2 left-2 z-10">
@@ -570,13 +599,6 @@ function GridView({ products, globalMarkup, selected, onSelect, onMarkup, onRelo
                     onError={e => { e.target.style.display = 'none' }} />
                 : <span className="text-4xl select-none">📦</span>
               }
-              <div className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                <button onClick={() => onMarkup(p)} title="Ajustar markup"
-                  className="w-6 h-6 bg-blue-500 text-white rounded-full text-[10px]
-                             flex items-center justify-center hover:bg-blue-600">
-                  %
-                </button>
-              </div>
               {!isActive && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                   <span className="text-xs bg-red-500 text-white font-bold px-2 py-1 rounded">🚫 Oculto</span>

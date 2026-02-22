@@ -140,6 +140,8 @@ export default function Orders() {
   const [error,        setError]        = useState(null)
   const [filterStatus, setFilterStatus] = useState('')
   const [selected,     setSelected]     = useState(null)
+  const [simulating,   setSimulating]   = useState(false)
+  const [simMessage,   setSimMessage]   = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -164,6 +166,31 @@ export default function Orders() {
   // Actualiza el estado del pedido en la lista local sin recargar todo
   const handleStatusChange = (id, newStatus) => {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
+  }
+
+  const handleSimulateSale = async () => {
+    setSimulating(true)
+    setSimMessage('')
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'simulate_sale' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.success) throw new Error(data?.message || `HTTP ${res.status}`)
+
+      setSimMessage(`✅ Venta simulada creada (#${data.id})`)
+      if (filterStatus) {
+        setFilterStatus('')
+      } else {
+        load()
+      }
+    } catch {
+      setSimMessage('❌ No se pudo simular la venta')
+    } finally {
+      setSimulating(false)
+    }
   }
 
   return (
@@ -196,8 +223,26 @@ export default function Orders() {
               className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50 text-gray-500">
               🔄 Actualizar
             </button>
+            <button
+              onClick={handleSimulateSale}
+              disabled={simulating}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+              title="Crear un pedido demo para probar todo el flujo"
+            >
+              {simulating ? 'Simulando...' : '🧪 Simular venta'}
+            </button>
           </div>
         </div>
+
+        {simMessage && (
+          <div className={`mx-5 mt-4 rounded-xl px-4 py-3 text-sm border ${
+            simMessage.startsWith('✅')
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+              : 'bg-rose-50 border-rose-200 text-rose-700'
+          }`}>
+            {simMessage}
+          </div>
+        )}
 
         {/* Loading */}
         {loading && (

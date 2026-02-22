@@ -100,6 +100,24 @@
       ]
     },
     {
+      "route": "/api/products/*/markup",
+      "allowedRoles": [
+        "admin"
+      ]
+    },
+    {
+      "route": "/api/account-profile*",
+      "allowedRoles": [
+        "anonymous"
+      ]
+    },
+    {
+      "route": "/api/my-orders*",
+      "allowedRoles": [
+        "anonymous"
+      ]
+    },
+    {
       "route": "/api/categories*",
       "allowedRoles": [
         "admin"
