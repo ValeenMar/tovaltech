@@ -2,7 +2,7 @@
 // Gestión de categorías con soporte de subcategorías (padre/hijo).
 // - Crear categorías padre o subcategorías asignadas a un padre
 // - Vista en árbol expandible
-// - Markup inline editable
+// - Markup inline editable con barra Aplicar/Cancelar (sin refresh por cambio)
 // - Asignación de productos a cualquier nivel
 
 import { useState, useEffect, useCallback, useRef } from 'react'
@@ -43,69 +43,128 @@ function buildTree(categories) {
   }))
 }
 
+// ── Barra sticky de cambios pendientes ─────────────────────────────────────
+function PendingBar({ pendingCount, onApply, onCancel, saving }) {
+  if (pendingCount === 0) return null
+  return (
+    <div className="sticky top-0 z-30 flex items-center justify-between
+                    bg-amber-50 border border-amber-300 rounded-xl px-5 py-3 mb-4 shadow-md">
+      <div className="flex items-center gap-2.5">
+        <span className="text-amber-500 text-lg">⚠️</span>
+        <div>
+          <p className="text-sm font-semibold text-amber-800">
+            {pendingCount} cambio{pendingCount !== 1 ? 's' : ''} sin guardar
+          </p>
+          <p className="text-xs text-amber-600">
+            Los cambios no se aplicarán hasta que presiones <strong>Aplicar</strong>.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={onCancel}
+          disabled={saving}
+          className="px-4 py-2 rounded-xl border border-amber-300 text-sm font-medium
+                     text-amber-700 bg-white hover:bg-amber-50 disabled:opacity-50 transition-colors">
+          Cancelar
+        </button>
+        <button
+          onClick={onApply}
+          disabled={saving}
+          className="px-5 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold
+                     hover:bg-amber-600 disabled:opacity-50 transition-colors flex items-center gap-2">
+          {saving
+            ? <><span className="animate-spin inline-block">⚙️</span> Guardando...</>
+            : <>✅ Aplicar {pendingCount} cambio{pendingCount !== 1 ? 's' : ''}</>}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Markup editable inline ──────────────────────────────────────────────────
-function InlineMarkupEditor({ cat, globalMarkup, onSaved }) {
+// pendingValue: valor pendiente que viene del padre (undefined = sin cambio)
+// onPendingChange(id, value | undefined): notifica al padre
+function InlineMarkupEditor({ cat, globalMarkup, pendingValue, onPendingChange }) {
   const [editing, setEditing] = useState(false)
-  const [value,   setValue]   = useState(cat.markup_pct != null ? String(cat.markup_pct) : '')
-  const [saving,  setSaving]  = useState(false)
-  const [flash,   setFlash]   = useState(null)
+  const [value,   setValue]   = useState('')
   const inputRef = useRef(null)
 
-  useEffect(() => { setValue(cat.markup_pct != null ? String(cat.markup_pct) : '') }, [cat.markup_pct])
+  // Valor efectivo a mostrar: pendiente o guardado en DB
+  const displayValue = pendingValue !== undefined ? pendingValue : cat.markup_pct
+  const hasPending   = pendingValue !== undefined
+  const hasCustom    = displayValue !== null && displayValue !== undefined
+
+  // Sincronizar input cuando cambia el display
+  useEffect(() => {
+    setValue(displayValue != null ? String(displayValue) : '')
+  }, [displayValue])
+
   useEffect(() => { if (editing) inputRef.current?.select() }, [editing])
 
-  const save = async () => {
+  const commit = () => {
     const markup = value.trim() === '' ? null : parseFloat(value)
     if (markup !== null && (!Number.isFinite(markup) || markup < 0 || markup > 500)) {
-      setFlash('err'); setTimeout(() => { setFlash(null); setEditing(false) }, 1500); return
+      setValue(displayValue != null ? String(displayValue) : '')
+      setEditing(false)
+      return
     }
-    setSaving(true)
-    try {
-      const res = await fetch('/api/categories', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'update', id: cat.id, markup_pct: markup }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Error')
-      setEditing(false); setFlash('ok')
-      setTimeout(() => setFlash(null), 1500)
-      onSaved()
-    } catch {
-      setFlash('err'); setTimeout(() => { setFlash(null); setEditing(false) }, 1500)
-    } finally { setSaving(false) }
+    if (markup !== cat.markup_pct) {
+      onPendingChange(cat.id, markup)
+    } else {
+      // Volvió al valor guardado → limpiar pending
+      onPendingChange(cat.id, undefined)
+    }
+    setEditing(false)
   }
-
-  if (flash === 'ok') return <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium bg-green-50 px-2.5 py-1 rounded-lg">✓ Guardado</span>
-  if (flash === 'err') return <span className="inline-flex items-center gap-1 text-xs text-red-500 font-medium bg-red-50 px-2.5 py-1 rounded-lg">✕ Error</span>
 
   if (editing) {
     return (
       <div className="flex items-center gap-1.5">
-        <input ref={inputRef} type="number" min="0" max="500" step="0.5"
-          value={value} onChange={e => setValue(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setValue(cat.markup_pct != null ? String(cat.markup_pct) : ''); setEditing(false) } }}
-          onBlur={save}
-          className="w-20 px-2 py-1 border border-blue-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <input
+          ref={inputRef}
+          type="number" min="0" max="500" step="0.5"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter')  commit()
+            if (e.key === 'Escape') { setValue(displayValue != null ? String(displayValue) : ''); setEditing(false) }
+          }}
+          onBlur={commit}
+          className="w-20 px-2 py-1 border border-amber-400 rounded-lg text-sm
+                     focus:outline-none focus:ring-2 focus:ring-amber-500"
         />
         <span className="text-gray-400 text-sm">%</span>
-        {saving && <span className="text-xs text-gray-400 animate-pulse">guardando…</span>}
       </div>
     )
   }
 
-  const hasCustom = cat.markup_pct !== null
   return (
-    <button onClick={() => setEditing(true)} title="Click para editar"
+    <button
+      onClick={() => { setValue(displayValue != null ? String(displayValue) : ''); setEditing(true) }}
+      title="Click para editar"
       className={`flex items-center gap-1.5 text-sm rounded-lg px-2.5 py-1 transition-all cursor-pointer
-        ${hasCustom ? 'bg-purple-50 text-purple-700 hover:bg-purple-100' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>
+        ${hasPending
+          ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-300 hover:bg-amber-100'
+          : hasCustom
+            ? 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+            : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>
       {hasCustom
-        ? <><span className="font-semibold">{cat.markup_pct}%</span><span className="text-[10px] font-medium text-purple-400">✦ custom</span></>
-        : <><span className="italic">global ({globalMarkup ?? '—'}%)</span><span className="text-[11px] text-gray-300 ml-1">✏️</span></>}
+        ? <>
+            <span className="font-semibold">{displayValue}%</span>
+            <span className={`text-[10px] font-medium ${hasPending ? 'text-amber-500' : 'text-purple-400'}`}>
+              {hasPending ? '✦ pendiente' : '✦ custom'}
+            </span>
+          </>
+        : <>
+            <span className="italic">global ({globalMarkup ?? '—'}%)</span>
+            <span className="text-[11px] text-gray-300 ml-1">✏️</span>
+          </>}
     </button>
   )
 }
 
-// ── Modal crear categoría (con opción de elegir padre) ──────────────────────
+// ── Modal crear categoría ──────────────────────────────────────────────────
 function CreateModal({ allCategories, onClose, onCreated }) {
   const [name,     setName]     = useState('')
   const [markup,   setMarkup]   = useState('')
@@ -116,7 +175,6 @@ function CreateModal({ allCategories, onClose, onCreated }) {
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
-  // Solo categorías padre disponibles para elegir
   const parents = allCategories.filter(c => !c.parent_id)
 
   const handleSubmit = async () => {
@@ -152,12 +210,10 @@ function CreateModal({ allCategories, onClose, onCreated }) {
               placeholder="Ej: Monitores"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-
-          {/* Categoría padre — convierte esto en subcategoría */}
           {parents.length > 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-600 mb-1">
-                Categoría padre <span className="text-gray-400 font-normal">(opcional — si elegís una, esto es una subcategoría)</span>
+                Categoría padre <span className="text-gray-400 font-normal">(opcional)</span>
               </label>
               <select value={parentId} onChange={e => setParentId(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -166,7 +222,6 @@ function CreateModal({ allCategories, onClose, onCreated }) {
               </select>
             </div>
           )}
-
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-1">
               Markup % <span className="text-gray-400 font-normal">(opcional)</span>
@@ -179,14 +234,11 @@ function CreateModal({ allCategories, onClose, onCreated }) {
             </div>
           </div>
         </div>
-
         {parentId !== '' && (
           <p className="mt-3 text-xs bg-indigo-50 text-indigo-700 px-3 py-2 rounded-lg">
             📂 Se creará como subcategoría de <strong>{parents.find(p => String(p.id) === String(parentId))?.name}</strong>.
-            En la tienda aparecerá como filtro adicional dentro de esa categoría.
           </p>
         )}
-
         {error && <p className="text-xs text-red-500 mt-3 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
         <div className="flex gap-3 mt-5">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50">Cancelar</button>
@@ -200,14 +252,13 @@ function CreateModal({ allCategories, onClose, onCreated }) {
   )
 }
 
-// ── Modal: editar nombre/padre de categoría ─────────────────────────────────
+// ── Modal: editar nombre/padre ─────────────────────────────────────────────
 function EditModal({ category, allCategories, onClose, onSaved }) {
   const [name,     setName]     = useState(category.name)
   const [parentId, setParentId] = useState(category.parent_id ? String(category.parent_id) : '')
   const [saving,   setSaving]   = useState(false)
   const [error,    setError]    = useState(null)
 
-  // Solo padres que no sean esta categoría ni sus hijos
   const parents = allCategories.filter(c => !c.parent_id && c.id !== category.id)
 
   const handleSubmit = async () => {
@@ -266,7 +317,7 @@ function EditModal({ category, allCategories, onClose, onSaved }) {
   )
 }
 
-// ── Modal: eliminar categoría ───────────────────────────────────────────────
+// ── Modal: eliminar categoría ──────────────────────────────────────────────
 function DeleteModal({ category, allCategories, onClose, onDeleted }) {
   const [reassignTo, setReassignTo] = useState('')
   const [saving,     setSaving]     = useState(false)
@@ -384,7 +435,6 @@ function AssignModal({ category, allCategories, onClose }) {
           <h3 className="font-bold text-gray-800 text-base">📦 Asignar a "{category.name}"</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
         </div>
-
         {done !== null ? (
           <div className="text-center py-8">
             <p className="text-3xl mb-3">✅</p>
@@ -396,7 +446,6 @@ function AssignModal({ category, allCategories, onClose }) {
             <input value={search} onChange={e => handleSearch(e.target.value)}
               placeholder="🔍 Buscar productos..."
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-
             <div className="flex-1 overflow-y-auto border border-gray-100 rounded-xl">
               {loading ? (
                 <div className="flex items-center justify-center h-32 text-gray-400 text-sm animate-pulse">Cargando...</div>
@@ -409,8 +458,7 @@ function AssignModal({ category, allCategories, onClose }) {
                       className="w-4 h-4 rounded accent-blue-600" />
                     {p.image_url
                       ? <img src={p.image_url} className="w-8 h-8 object-contain rounded flex-shrink-0" alt="" />
-                      : <div className="w-8 h-8 bg-gray-100 rounded flex-shrink-0" />
-                    }
+                      : <div className="w-8 h-8 bg-gray-100 rounded flex-shrink-0" />}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-gray-700">{fmt(p.name)}</p>
                       <p className="text-[11px] text-gray-400">{p.brand} · stock {p.stock}</p>
@@ -424,7 +472,6 @@ function AssignModal({ category, allCategories, onClose }) {
                 ))
               )}
             </div>
-
             <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
               <span className="text-xs text-gray-400">
                 {selected.size > 0
@@ -447,7 +494,7 @@ function AssignModal({ category, allCategories, onClose }) {
 }
 
 // ── Fila de subcategoría ──────────────────────────────────────────────────────
-function SubcategoryRow({ cat, allCategories, globalMarkup, onReload }) {
+function SubcategoryRow({ cat, allCategories, globalMarkup, pendingValue, onPendingChange, onReload }) {
   const [showEdit,   setShowEdit]   = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [showAssign, setShowAssign] = useState(false)
@@ -472,7 +519,12 @@ function SubcategoryRow({ cat, allCategories, globalMarkup, onReload }) {
             {cat.product_count}
           </span>
         </div>
-        <InlineMarkupEditor cat={cat} globalMarkup={globalMarkup} onSaved={onReload} />
+        <InlineMarkupEditor
+          cat={cat}
+          globalMarkup={globalMarkup}
+          pendingValue={pendingValue}
+          onPendingChange={onPendingChange}
+        />
         <div className="flex items-center gap-1.5 shrink-0">
           <button onClick={() => setShowAssign(true)}
             className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-50 text-green-700
@@ -499,21 +551,19 @@ function SubcategoryRow({ cat, allCategories, globalMarkup, onReload }) {
 }
 
 // ── Fila de categoría padre ───────────────────────────────────────────────────
-function CategoryRow({ cat, allCategories, globalMarkup, onReload, onViewProducts }) {
-  const [showEdit,     setShowEdit]     = useState(false)
-  const [showDelete,   setShowDelete]   = useState(false)
-  const [showAssign,   setShowAssign]   = useState(false)
-  const [expanded,     setExpanded]     = useState(true) // subcategorías visibles por defecto
+function CategoryRow({ cat, allCategories, globalMarkup, pendingChanges, onPendingChange, onReload, onViewProducts }) {
+  const [showEdit,   setShowEdit]   = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const [showAssign, setShowAssign] = useState(false)
+  const [expanded,   setExpanded]   = useState(true)
 
   const hasChildren = cat.children?.length > 0
 
   return (
     <>
-      {/* Fila padre */}
       <div className="grid grid-cols-[1fr_60px_210px_auto] items-center
                       px-5 py-3.5 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 gap-4">
         <div className="min-w-0 flex items-center gap-2">
-          {/* Toggle expand subcategorías */}
           {hasChildren ? (
             <button onClick={() => setExpanded(e => !e)}
               className="text-gray-400 hover:text-gray-600 text-sm font-bold w-4 flex-shrink-0">
@@ -534,7 +584,12 @@ function CategoryRow({ cat, allCategories, globalMarkup, onReload, onViewProduct
             {cat.product_count}
           </span>
         </div>
-        <InlineMarkupEditor cat={cat} globalMarkup={globalMarkup} onSaved={onReload} />
+        <InlineMarkupEditor
+          cat={cat}
+          globalMarkup={globalMarkup}
+          pendingValue={pendingChanges[cat.id]}
+          onPendingChange={onPendingChange}
+        />
         <div className="flex items-center gap-1.5 shrink-0">
           {cat.product_count > 0 && (
             <button onClick={() => onViewProducts(cat.name)}
@@ -557,13 +612,14 @@ function CategoryRow({ cat, allCategories, globalMarkup, onReload, onViewProduct
         </div>
       </div>
 
-      {/* Subcategorías expandibles */}
       {hasChildren && expanded && cat.children.map(child => (
         <SubcategoryRow
           key={child.id}
           cat={child}
           allCategories={allCategories}
           globalMarkup={globalMarkup}
+          pendingValue={pendingChanges[child.id]}
+          onPendingChange={onPendingChange}
           onReload={onReload}
         />
       ))}
@@ -583,9 +639,13 @@ export default function Categories() {
   const { categories, loading, error, reload } = useCategories()
   const { setAdminCategoryFilter } = useApp()
   const navigate = useNavigate()
-  const [showCreate,   setShowCreate]   = useState(false)
-  const [search,       setSearch]       = useState('')
-  const [globalMarkup, setGlobalMarkup] = useState(null)
+  const [showCreate,     setShowCreate]     = useState(false)
+  const [search,         setSearch]         = useState('')
+  const [globalMarkup,   setGlobalMarkup]   = useState(null)
+  // pendingChanges: { [categoryId]: newMarkupValue | undefined }
+  const [pendingChanges, setPendingChanges] = useState({})
+  const [applyingSave,   setApplyingSave]   = useState(false)
+  const [saveResult,     setSaveResult]     = useState(null)
 
   useEffect(() => {
     fetch('/api/settings')
@@ -594,10 +654,59 @@ export default function Categories() {
       .catch(() => {})
   }, [])
 
-  // Armar árbol
+  const handlePendingChange = (id, value) => {
+    setPendingChanges(prev => {
+      const next = { ...prev }
+      if (value === undefined) {
+        delete next[id]
+      } else {
+        next[id] = value
+      }
+      return next
+    })
+    setSaveResult(null)
+  }
+
+  const pendingCount = Object.keys(pendingChanges).length
+
+  const handleCancel = () => {
+    setPendingChanges({})
+    setSaveResult(null)
+  }
+
+  const handleApply = async () => {
+    setApplyingSave(true)
+    setSaveResult(null)
+    const entries = Object.entries(pendingChanges)
+    const errors  = []
+
+    await Promise.all(entries.map(async ([id, markup_pct]) => {
+      try {
+        const res = await fetch('/api/categories', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'update', id: parseInt(id, 10), markup_pct }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Error')
+      } catch (e) {
+        errors.push({ id, error: e.message })
+      }
+    }))
+
+    setApplyingSave(false)
+
+    if (errors.length === 0) {
+      setPendingChanges({})
+      setSaveResult({ ok: true, count: entries.length })
+      setTimeout(() => setSaveResult(null), 2500)
+      reload()
+    } else {
+      setSaveResult({ ok: false, errors })
+    }
+  }
+
   const tree = buildTree(categories)
 
-  // Filtrar árbol según búsqueda
   const filtered = !search ? tree : tree.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
     c.children?.some(ch => ch.name.toLowerCase().includes(search.toLowerCase()))
@@ -647,7 +756,7 @@ export default function Categories() {
         <span>1. Producto individual (★)</span>
         <span>2. Categoría / Subcategoría (★)</span>
         <span>3. Global — fallback final</span>
-        <span className="text-blue-500 italic">Click directo en el markup para editar sin modal.</span>
+        <span className="text-blue-500 italic">Click en el markup para editar · Aplicar para confirmar los cambios.</span>
         <span className="ml-auto text-indigo-500 font-medium">▸ Las subcategorías aparecen como filtros en la tienda</span>
       </div>
 
@@ -661,6 +770,30 @@ export default function Categories() {
                      focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
+
+      {/* Barra sticky de cambios pendientes */}
+      <PendingBar
+        pendingCount={pendingCount}
+        onApply={handleApply}
+        onCancel={handleCancel}
+        saving={applyingSave}
+      />
+
+      {/* Feedback post-guardado */}
+      {saveResult?.ok && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl
+                        px-5 py-3 mb-4 text-sm text-green-700 font-medium">
+          ✅ {saveResult.count} cambio{saveResult.count !== 1 ? 's' : ''} guardado{saveResult.count !== 1 ? 's' : ''} correctamente.
+        </div>
+      )}
+      {saveResult?.ok === false && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-3 mb-4 text-sm text-red-700">
+          ⚠️ Algunos cambios no pudieron guardarse:
+          <ul className="mt-1 text-xs list-disc ml-4">
+            {saveResult.errors.map((e, i) => <li key={i}>ID {e.id}: {e.error}</li>)}
+          </ul>
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center justify-center h-40 text-gray-400">
@@ -707,6 +840,8 @@ export default function Categories() {
                 cat={cat}
                 allCategories={categories}
                 globalMarkup={globalMarkup}
+                pendingChanges={pendingChanges}
+                onPendingChange={handlePendingChange}
                 onReload={reload}
                 onViewProducts={handleViewProducts}
               />
