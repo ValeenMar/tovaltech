@@ -634,6 +634,162 @@ function CategoryRow({ cat, allCategories, globalMarkup, pendingChanges, onPendi
   )
 }
 
+// ── Panel: markup global de categorías ────────────────────────────────────────
+function BulkMarkupPanel({ onDone }) {
+  const [value,         setValue]         = useState('')
+  const [resetProducts, setResetProducts] = useState(false)
+  const [saving,        setSaving]        = useState(false)
+  const [result,        setResult]        = useState(null)  // { ok, data } | null
+  const [showConfirm,   setShowConfirm]   = useState(false)
+
+  const handleApply = async () => {
+    setShowConfirm(false)
+    setSaving(true)
+    setResult(null)
+    try {
+      const res  = await fetch('/api/categories', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action:                 'bulk_markup',
+          markup_pct:             parseFloat(value),
+          reset_products_markup:  resetProducts,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Error')
+      setResult({ ok: true, data })
+      setValue('')
+      setResetProducts(false)
+      onDone()
+    } catch (e) {
+      setResult({ ok: false, error: e.message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const isValid = value !== '' && Number.isFinite(parseFloat(value)) && parseFloat(value) >= 0 && parseFloat(value) <= 500
+
+  return (
+    <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl px-5 py-4 mb-5">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-sm font-bold text-violet-800 flex items-center gap-2">
+            🎛️ Markup global de categorías
+          </p>
+          <p className="text-xs text-violet-600 mt-0.5">
+            Cambia el markup de <strong>todas</strong> las categorías de una vez.
+            Solo afecta categorías — los productos con markup propio no cambian (a menos que actives el reset).
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 mt-4">
+        {/* Input valor */}
+        <div>
+          <label className="block text-xs font-semibold text-violet-700 mb-1">Nuevo markup para todas</label>
+          <div className="flex items-center gap-1.5">
+            <input
+              type="number" min="0" max="500" step="0.5"
+              value={value}
+              onChange={e => { setValue(e.target.value); setResult(null) }}
+              placeholder="Ej: 40"
+              className="w-24 px-3 py-2 border border-violet-300 rounded-lg text-sm bg-white
+                         focus:outline-none focus:ring-2 focus:ring-violet-500"
+            />
+            <span className="text-violet-600 font-semibold text-sm">%</span>
+          </div>
+        </div>
+
+        {/* Toggle reset productos */}
+        <div className="flex-1 min-w-[260px]">
+          <label className="flex items-start gap-2.5 cursor-pointer group">
+            <div className="relative mt-0.5 flex-shrink-0">
+              <input
+                type="checkbox"
+                checked={resetProducts}
+                onChange={e => setResetProducts(e.target.checked)}
+                className="sr-only"
+              />
+              <div
+                onClick={() => setResetProducts(v => !v)}
+                className={`w-10 h-5 rounded-full transition-colors cursor-pointer
+                  ${resetProducts ? 'bg-violet-500' : 'bg-gray-200'}`}>
+                <div className={`w-4 h-4 bg-white rounded-full shadow mt-0.5 transition-transform
+                  ${resetProducts ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-700">
+                Resetear markup individual de productos
+              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Borra el markup propio de <strong>todos los productos</strong> para que hereden el de su categoría.
+                {resetProducts && <span className="text-orange-600 font-medium"> ⚠️ Esta acción afecta a toda la base.</span>}
+              </p>
+            </div>
+          </label>
+        </div>
+
+        {/* Botón */}
+        <button
+          onClick={() => setShowConfirm(true)}
+          disabled={!isValid || saving}
+          className="px-5 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold
+                     hover:bg-violet-700 disabled:opacity-40 transition-colors flex items-center gap-2">
+          {saving
+            ? <><span className="animate-spin inline-block">⚙️</span> Aplicando...</>
+            : '🎛️ Aplicar a todas'}
+        </button>
+      </div>
+
+      {/* Resultado */}
+      {result?.ok && (
+        <div className="mt-3 text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg">
+          ✅ {result.data.updated_cats} categorías actualizadas a <strong>{result.data.markup_pct}%</strong>.
+          {result.data.updated_products > 0 && ` Markup reseteado en ${result.data.updated_products} productos.`}
+        </div>
+      )}
+      {result?.ok === false && (
+        <div className="mt-3 text-xs bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-lg">
+          ⚠️ {result.error}
+        </div>
+      )}
+
+      {/* Modal confirmación */}
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+             onClick={() => setShowConfirm(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+               onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-gray-800 mb-2 text-base">🎛️ Confirmar cambio masivo</h3>
+            <p className="text-sm text-gray-600 mb-2">
+              Vas a setear <strong>{value}%</strong> de markup en <strong>todas</strong> las categorías.
+            </p>
+            {resetProducts && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-xs text-orange-700 mb-3">
+                ⚠️ <strong>Además</strong> se va a borrar el markup individual de todos los productos.
+                Quedarán heredando el markup de su categoría.
+              </div>
+            )}
+            <p className="text-xs text-gray-400 mb-5">Esta operación no se puede deshacer desde la app.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button onClick={handleApply}
+                className="flex-1 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700">
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function Categories() {
   const { categories, loading, error, reload } = useCategories()
@@ -759,6 +915,9 @@ export default function Categories() {
         <span className="text-blue-500 italic">Click en el markup para editar · Aplicar para confirmar los cambios.</span>
         <span className="ml-auto text-indigo-500 font-medium">▸ Las subcategorías aparecen como filtros en la tienda</span>
       </div>
+
+      {/* Panel markup global */}
+      <BulkMarkupPanel onDone={reload} />
 
       {/* Búsqueda */}
       <div className="mb-4">

@@ -274,6 +274,50 @@ async function assignProducts(pool, { product_ids, category_name }) {
   };
 }
 
+// ── BULK MARKUP ───────────────────────────────────────────────────────────────
+// Pone el mismo markup_pct en TODAS las categorías.
+// Si reset_products_markup = true, también borra el markup_pct individual
+// de todos los productos (quedan heredando de su categoría).
+
+async function bulkMarkup(pool, { markup_pct, reset_products_markup }) {
+  const pct = parseFloat(markup_pct);
+  if (!Number.isFinite(pct) || pct < 0 || pct > 500) {
+    return { status: 400, body: { error: 'markup_pct debe ser un número entre 0 y 500.' } };
+  }
+
+  // Actualizar todas las categorías
+  const catResult = await pool.request()
+    .input('markup_pct', pct)
+    .query(`
+      UPDATE dbo.tovaltech_categories
+      SET markup_pct = @markup_pct, updated_at = GETDATE();
+      SELECT @@ROWCOUNT AS updated_cats;
+    `);
+
+  const updatedCats = catResult.recordset?.[0]?.updated_cats ?? 0;
+
+  let updatedProducts = 0;
+  if (reset_products_markup) {
+    const prodResult = await pool.request().query(`
+      UPDATE dbo.tovaltech_products
+      SET markup_pct = NULL, updated_at = GETDATE()
+      WHERE markup_pct IS NOT NULL;
+      SELECT @@ROWCOUNT AS updated_prods;
+    `);
+    updatedProducts = prodResult.recordset?.[0]?.updated_prods ?? 0;
+  }
+
+  return {
+    status: 200,
+    body: {
+      success:          true,
+      markup_pct:       pct,
+      updated_cats:     updatedCats,
+      updated_products: updatedProducts,
+    },
+  };
+}
+
 // ── GET PRODUCTS (para el selector del admin) ─────────────────────────────────
 
 async function getProductsForAssign(pool, { search, category, limit = 100, offset = 0 }) {
@@ -357,7 +401,8 @@ module.exports = async function (context, req) {
         case 'create':  result = await createCategory(pool, body); break;
         case 'update':  result = await updateCategory(pool, body); break;
         case 'delete':  result = await deleteCategory(pool, body); break;
-        case 'assign':  result = await assignProducts(pool, body); break;
+        case 'assign':       result = await assignProducts(pool, body); break;
+        case 'bulk_markup':  result = await bulkMarkup(pool, body);    break;
         default:
           result = { status: 400, body: { error: `Acción desconocida: "${action}". Válidas: create, update, delete, assign.` } };
       }
