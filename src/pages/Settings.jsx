@@ -2,9 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 
 // ── Panel de sincronización ──────────────────────────────────────────────────
 function SyncPanel() {
-  const [lastSync,  setLastSync]  = useState(null)
-  const [syncing,   setSyncing]   = useState(false)
+  const [lastSync,      setLastSync]      = useState(null)
+  const [syncing,       setSyncing]       = useState(false)
   const [loadingStatus, setLoadingStatus] = useState(true)
+
+  // Estado del scraping de imágenes Invid
+  const [imgStatus,   setImgStatus]   = useState(null)  // resultado del último run
+  const [imgRunning,  setImgRunning]  = useState(false)
 
   const loadStatus = useCallback(async () => {
     setLoadingStatus(true)
@@ -12,9 +16,7 @@ function SyncPanel() {
       const res  = await fetch('/api/settings')
       const data = await res.json()
       const raw  = data?.last_sync_result?.value
-      if (raw && raw !== '{}') {
-        setLastSync(JSON.parse(raw))
-      }
+      if (raw && raw !== '{}') setLastSync(JSON.parse(raw))
     } catch { /* silencio */ }
     finally { setLoadingStatus(false) }
   }, [])
@@ -34,6 +36,20 @@ function SyncPanel() {
     }
   }
 
+  const handleFetchImages = async () => {
+    setImgRunning(true)
+    setImgStatus(null)
+    try {
+      const res  = await fetch('/api/sync-images-invid', { method: 'POST' })
+      const data = await res.json()
+      setImgStatus(data)
+    } catch (e) {
+      setImgStatus({ ok: false, error: e.message })
+    } finally {
+      setImgRunning(false)
+    }
+  }
+
   const fmtTime = (iso) => {
     if (!iso) return '—'
     return new Date(iso).toLocaleString('es-AR', {
@@ -46,11 +62,12 @@ function SyncPanel() {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+      {/* ── Header + botón sync ────────────────────────────────────────── */}
       <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
         <div>
           <h3 className="font-semibold text-gray-800">🔄 Sincronización de productos</h3>
           <p className="text-sm text-gray-500 mt-0.5">
-            Actualiza el catálogo desde las APIs de Elit y NewBytes + tipo de cambio oficial.
+            Actualiza el catálogo desde Elit, NewBytes e Invid + tipo de cambio oficial.
           </p>
         </div>
         <button
@@ -65,6 +82,7 @@ function SyncPanel() {
         </button>
       </div>
 
+      {/* ── Resultado del último sync ──────────────────────────────────── */}
       <div className="px-6 py-5">
         {loadingStatus ? (
           <p className="text-sm text-gray-400">Cargando estado...</p>
@@ -89,66 +107,136 @@ function SyncPanel() {
               <span className="text-xs font-normal opacity-70">{fmtTime(lastSync.timestamp)}</span>
             </div>
 
-            {/* Stats del último sync exitoso */}
+            {/* Stats por proveedor */}
             {isOk && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: 'Dólar oficial', value: `$${lastSync.dolar_oficial?.toLocaleString('es-AR') ?? '—'}` },
-                  { label: 'Total procesados', value: lastSync.total?.toLocaleString('es-AR') ?? '—', highlight: true },
-                  {
-                    label: 'Elit',
-                    value: lastSync.elit
-                      ? `${lastSync.elit.parsed?.toLocaleString('es-AR')} parseados · ${lastSync.elit.inserted} nuevos · ${lastSync.elit.updated} actualizados`
-                      : '—',
-                    full: true,
-                  },
-                  {
-                    label: 'NewBytes',
-                    value: lastSync.newbytes
-                      ? `${lastSync.newbytes.parsed?.toLocaleString('es-AR')} parseados · ${lastSync.newbytes.inserted} nuevos · ${lastSync.newbytes.updated} actualizados`
-                      : '—',
-                    full: true,
-                  },
-                ].filter(s => !s.full).map(stat => (
-                  <div key={stat.label}
-                    className={`rounded-xl px-4 py-3 text-center
-                      ${stat.highlight ? 'bg-blue-50 border border-blue-100' : 'bg-gray-50 border border-gray-100'}`}>
-                    <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">{stat.label}</p>
-                    <p className={`text-base font-bold ${stat.highlight ? 'text-blue-700' : 'text-gray-700'}`}>
-                      {stat.value}
+              <div className="grid grid-cols-1 gap-3">
+                {/* Dólar + total */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-center">
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Dólar oficial</p>
+                    <p className="text-base font-bold text-gray-700">
+                      ${lastSync.dolar_oficial?.toLocaleString('es-AR') ?? '—'}
                     </p>
                   </div>
-                ))}
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-center">
+                    <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Total procesados</p>
+                    <p className="text-base font-bold text-blue-700">
+                      {lastSync.total?.toLocaleString('es-AR') ?? '—'}
+                    </p>
+                  </div>
+                </div>
 
-                {/* Elit y NewBytes en filas separadas con más detalle */}
-                {lastSync.elit && (
-                  <div className="col-span-2 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
-                    <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1.5">Elit</p>
-                    <div className="flex gap-4 text-sm">
-                      <span className="text-gray-600">{lastSync.elit.parsed?.toLocaleString()} <span className="text-gray-400 text-xs">parseados</span></span>
-                      <span className="text-green-600 font-semibold">+{lastSync.elit.inserted} <span className="text-gray-400 font-normal text-xs">nuevos</span></span>
-                      <span className="text-blue-600 font-semibold">{lastSync.elit.updated} <span className="text-gray-400 font-normal text-xs">actualizados</span></span>
+                {/* Una fila por proveedor */}
+                {[
+                  { key: 'elit',     label: 'Elit',     color: 'blue'   },
+                  { key: 'newbytes', label: 'NewBytes', color: 'purple' },
+                  { key: 'invid',    label: 'Invid',    color: 'orange' },
+                ].map(({ key, label, color }) => {
+                  const src = lastSync[key]
+                  if (!src) return null
+                  const skipped = src.skipped === 'sin_credenciales'
+                  const colorMap = {
+                    blue:   'text-blue-600',
+                    purple: 'text-purple-600',
+                    orange: 'text-orange-600',
+                  }
+                  return (
+                    <div key={key} className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
+                      <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1.5">{label}</p>
+                      {skipped ? (
+                        <p className="text-sm text-gray-400 italic">
+                          Sin credenciales — configurar INVID_USER e INVID_PASS en Azure
+                        </p>
+                      ) : src.error ? (
+                        <p className="text-sm text-red-500">Error: {src.error}</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <span className="text-gray-600">
+                            {src.parsed?.toLocaleString()}
+                            <span className="text-gray-400 text-xs ml-1">parseados</span>
+                          </span>
+                          <span className="text-green-600 font-semibold">
+                            +{src.inserted}
+                            <span className="text-gray-400 font-normal text-xs ml-1">nuevos</span>
+                          </span>
+                          <span className={`${colorMap[color]} font-semibold`}>
+                            {src.updated}
+                            <span className="text-gray-400 font-normal text-xs ml-1">actualizados</span>
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )}
-                {lastSync.newbytes && (
-                  <div className="col-span-2 bg-gray-50 border border-gray-100 rounded-xl px-4 py-3">
-                    <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1.5">NewBytes</p>
-                    <div className="flex gap-4 text-sm">
-                      <span className="text-gray-600">{lastSync.newbytes.parsed?.toLocaleString()} <span className="text-gray-400 text-xs">parseados</span></span>
-                      <span className="text-green-600 font-semibold">+{lastSync.newbytes.inserted} <span className="text-gray-400 font-normal text-xs">nuevos</span></span>
-                      <span className="text-blue-600 font-semibold">{lastSync.newbytes.updated} <span className="text-gray-400 font-normal text-xs">actualizados</span></span>
-                    </div>
-                  </div>
-                )}
+                  )
+                })}
               </div>
             )}
 
             <p className="text-xs text-gray-400">
-              El sync local corre cada 20 minutos automáticamente. Este botón lo corre manualmente desde Azure Functions.
+              El sync automático corre todos los días a las 08:00 Argentina. Este botón lo dispara manualmente.
             </p>
           </div>
         )}
+      </div>
+
+      {/* ── Panel imágenes Invid ───────────────────────────────────────── */}
+      <div className="px-6 pb-6">
+        <div className="rounded-xl border border-orange-200 bg-orange-50 overflow-hidden">
+          <div className="px-4 py-3 flex items-center justify-between gap-4 border-b border-orange-100">
+            <div>
+              <p className="text-sm font-semibold text-orange-800">
+                🖼️ Obtener imágenes de Invid
+              </p>
+              <p className="text-xs text-orange-600 mt-0.5">
+                Visita la página de cada producto en Invid y extrae la imagen automáticamente.
+                Procesa de a 100 — ejecutá varias veces hasta completar todos.
+              </p>
+            </div>
+            <button
+              onClick={handleFetchImages}
+              disabled={imgRunning}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white text-xs font-semibold
+                         rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors whitespace-nowrap flex-shrink-0"
+            >
+              {imgRunning
+                ? <><span className="animate-spin inline-block">⚙️</span> Buscando...</>
+                : '▶ Buscar imágenes'}
+            </button>
+          </div>
+
+          {imgStatus && (
+            <div className="px-4 py-3">
+              {imgStatus.ok ? (
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <span className="text-orange-700">
+                    <strong>{imgStatus.processed}</strong>
+                    <span className="text-orange-500 ml-1 text-xs">procesados</span>
+                  </span>
+                  <span className="text-green-700 font-semibold">
+                    ✅ {imgStatus.found}
+                    <span className="text-gray-500 font-normal ml-1 text-xs">imágenes encontradas y activadas</span>
+                  </span>
+                  {imgStatus.not_found > 0 && (
+                    <span className="text-gray-500">
+                      {imgStatus.not_found}
+                      <span className="ml-1 text-xs">sin imagen</span>
+                    </span>
+                  )}
+                  {imgStatus.pending > 0 && (
+                    <span className="text-orange-600 font-semibold">
+                      ⏳ {imgStatus.pending}
+                      <span className="font-normal ml-1 text-xs">restantes — volvé a ejecutar</span>
+                    </span>
+                  )}
+                  {imgStatus.pending === 0 && (
+                    <span className="text-green-600 font-semibold">🎉 Todos completos</span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-red-600">Error: {imgStatus.error}</p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -163,18 +251,15 @@ export default function Settings() {
   const [saved,        setSaved]          = useState(false)
   const [error,        setError]          = useState(null)
 
-  // Ejemplo de precios para preview en vivo
   const EXAMPLES = [
-    { label: 'Monitor 24"',     cost_ars: 206062, cost_usd: 145.11 },
-    { label: 'Mouse Gamer',     cost_ars:  89990, cost_usd:  63.37 },
-    { label: 'Teclado Mec.',    cost_ars: 129990, cost_usd:  91.54 },
+    { label: 'Monitor 24"',     cost_ars: 206062 },
+    { label: 'Mouse Gamer',     cost_ars:  89990 },
+    { label: 'Teclado Mec.',    cost_ars: 129990 },
   ]
 
   const fmtARS = (n) => new Intl.NumberFormat('es-AR', {
     style: 'currency', currency: 'ARS', maximumFractionDigits: 0
   }).format(n)
-
-  const fmtUSD = (n) => `USD ${n.toFixed(2)}`
 
   const applyMarkup = (cost, pct) => Math.round(cost * (1 + pct / 100))
 
@@ -225,7 +310,7 @@ export default function Settings() {
     <div className="max-w-3xl space-y-6">
       <h2 className="text-xl font-bold text-gray-800">⚙️ Configuración</h2>
 
-      {/* ── Panel de sync ────────────────────────────────────────────── */}
+      {/* ── Panel de sync + imágenes Invid ───────────────────────────── */}
       <SyncPanel />
 
       {/* ── Markup global ────────────────────────────────────────────── */}
@@ -238,22 +323,16 @@ export default function Settings() {
         </div>
 
         <div className="px-6 py-5 space-y-5">
-          {/* Slider + input */}
           <div className="flex items-center gap-4">
             <input
-              id="markup-slider"
-              type="range"
-              min="0" max="200" step="1"
+              type="range" min="0" max="200" step="1"
               value={Math.min(200, previewPct || 0)}
               onChange={e => setInputMarkup(e.target.value)}
               className="flex-1 accent-blue-600"
             />
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <input
-                id="markup-input"
-                name="markup-input"
-                type="number"
-                min="0" max="500" step="0.5"
+                type="number" min="0" max="500" step="0.5"
                 value={inputMarkup}
                 onChange={e => setInputMarkup(e.target.value)}
                 className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center font-semibold
@@ -263,7 +342,6 @@ export default function Settings() {
             </div>
           </div>
 
-          {/* Preview tabla */}
           <div className="bg-gray-50 rounded-xl overflow-hidden">
             <div className="grid grid-cols-4 px-4 py-2 text-[11px] font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100">
               <span>Producto</span>
@@ -283,70 +361,57 @@ export default function Settings() {
             ))}
           </div>
 
-          {/* Info IVA */}
           <div className="flex gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm text-blue-700">
             <span className="flex-shrink-0">ℹ️</span>
             <div>
-              <strong>Los precios de costo ya incluyen IVA</strong> (los mayoristas te facturan con IVA).
-              Tu markup cubre tu ganancia e impuestos adicionales. El precio de venta también incluye IVA.
+              <strong>Los precios de costo ya incluyen IVA.</strong> Tu markup cubre tu ganancia e impuestos adicionales.
             </div>
           </div>
 
-          {error && (
-            <p className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-lg">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-500 bg-red-50 px-4 py-2 rounded-lg">{error}</p>}
 
-          {/* Botón guardar */}
           <div className="flex items-center gap-3">
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-6 py-2.5 bg-azure-500 text-white rounded-lg text-sm font-semibold
-                         hover:bg-azure-600 disabled:opacity-50 transition-colors"
+              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold
+                         hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
               {saving ? 'Guardando...' : 'Guardar cambios'}
             </button>
             {saved && (
-              <span className="text-sm text-green-600 font-medium flex items-center gap-1">
+              <span className="text-sm text-green-600 font-medium">
                 ✅ Guardado — los precios de la tienda se actualizaron
               </span>
             )}
             <span className="text-xs text-gray-400 ml-auto">
-              Markup actual guardado: <strong>{globalMarkup}%</strong>
+              Markup actual: <strong>{globalMarkup}%</strong>
             </span>
           </div>
         </div>
       </div>
 
-      {/* ── Info jerarquía de markup ─────────────────────────────────── */}
+      {/* ── Jerarquía de markup ───────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-gray-200 px-6 py-5">
         <h3 className="font-semibold text-gray-800 mb-3">📋 Jerarquía de markup</h3>
         <div className="space-y-2 text-sm text-gray-500">
-          <div className="flex items-start gap-3">
-            <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full mt-0.5">1°</span>
-            <div>
-              <strong className="text-gray-700">Markup por producto</strong>
-              <p className="text-xs text-gray-400">Se setea desde la sección Productos → botón %. Máxima prioridad.</p>
+          {[
+            { n: '1°', color: 'bg-blue-100 text-blue-700', title: 'Markup por producto', desc: 'Se setea desde Productos → botón %. Máxima prioridad.' },
+            { n: '2°', color: 'bg-purple-100 text-purple-700', title: 'Markup por categoría', desc: 'Se setea desde Categorías. Aplica a todos los productos de esa categoría sin markup propio.' },
+            { n: '3°', color: 'bg-gray-100 text-gray-600', title: 'Markup global (esta pantalla)', desc: 'Fallback final cuando producto y categoría no tienen markup personalizado.' },
+          ].map(({ n, color, title, desc }) => (
+            <div key={n} className="flex items-start gap-3">
+              <span className={`${color} text-xs font-bold px-2 py-0.5 rounded-full mt-0.5`}>{n}</span>
+              <div>
+                <strong className="text-gray-700">{title}</strong>
+                <p className="text-xs text-gray-400">{desc}</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full mt-0.5">2°</span>
-            <div>
-              <strong className="text-gray-700">Markup por categoría</strong>
-              <p className="text-xs text-gray-400">Se setea desde la sección Categorías. Aplica a todos los productos de esa categoría que no tengan markup propio.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="bg-gray-100 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full mt-0.5">3°</span>
-            <div>
-              <strong className="text-gray-700">Markup global (esta pantalla)</strong>
-              <p className="text-xs text-gray-400">Fallback final. Se usa cuando el producto y su categoría no tienen markup personalizado.</p>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* ── Simulador Mercado Pago ────────────────────────────────────── */}
+      {/* ── Simulador MP ──────────────────────────────────────────────── */}
       <MercadoPagoSimulator fmtARS={fmtARS} />
     </div>
   )
@@ -390,16 +455,14 @@ function MercadoPagoSimulator({ fmtARS }) {
         <div>
           <h3 className="font-semibold text-gray-800">Comisiones Mercado Pago</h3>
           <p className="text-sm text-gray-500 mt-0.5">
-            Checkout Pro · Cuánto te queda neto por venta según el plazo de acreditación
+            Checkout Pro · Cuánto te queda neto según el plazo de acreditación
           </p>
         </div>
       </div>
 
       <div className="px-6 py-5 space-y-5">
         <div>
-          <label className="block text-sm font-medium text-gray-600 mb-1.5">
-            Monto de venta a simular
-          </label>
+          <label className="block text-sm font-medium text-gray-600 mb-1.5">Monto de venta a simular</label>
           <div className="flex items-center gap-2">
             <span className="text-gray-500 font-semibold text-sm">$</span>
             <input
@@ -414,9 +477,7 @@ function MercadoPagoSimulator({ fmtARS }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-600 mb-2">
-            Plazo de acreditación
-          </label>
+          <label className="block text-sm font-medium text-gray-600 mb-2">Plazo de acreditación</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {MP_PLANS.map(plan => {
               const c = calc(plan)
@@ -477,7 +538,6 @@ function MercadoPagoSimulator({ fmtARS }) {
               className="text-sm text-[#009ee3] hover:text-[#0087c2] font-medium flex items-center gap-1">
               {showAll ? '▲ Ocultar' : '▼ Ver'} comparativa de todos los plazos
             </button>
-
             {showAll && (
               <div className="mt-3 rounded-xl border border-gray-200 overflow-hidden text-sm">
                 <div className="grid grid-cols-4 px-4 py-2.5 bg-gray-50 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
@@ -513,7 +573,7 @@ function MercadoPagoSimulator({ fmtARS }) {
           <span className="flex-shrink-0">⚠️</span>
           <span>
             Las tasas son orientativas para Checkout Pro en Argentina. Pueden variar según tu provincia
-            (por Ingresos Brutos) y si ofrecés cuotas sin interés. Verificá en{' '}
+            (Ingresos Brutos) y si ofrecés cuotas sin interés. Verificá en{' '}
             <a href="https://www.mercadopago.com.ar/costs-section" target="_blank" rel="noopener noreferrer"
               className="underline font-medium hover:text-amber-900">
               mercadopago.com.ar/costs-section

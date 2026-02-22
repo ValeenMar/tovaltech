@@ -11,76 +11,120 @@
   "routes": [
     {
       "route": "/api/auth-register",
-      "allowedRoles": ["anonymous"]
+      "allowedRoles": [
+        "anonymous"
+      ]
     },
     {
       "route": "/api/auth-login",
-      "allowedRoles": ["anonymous"]
+      "allowedRoles": [
+        "anonymous"
+      ]
     },
     {
       "route": "/api/auth-confirm",
-      "allowedRoles": ["anonymous"]
+      "allowedRoles": [
+        "anonymous"
+      ]
     },
     {
       "route": "/api/auth-logout",
-      "allowedRoles": ["anonymous"]
+      "allowedRoles": [
+        "anonymous"
+      ]
     },
     {
       "route": "/api/auth-me",
-      "allowedRoles": ["anonymous"]
+      "allowedRoles": [
+        "anonymous"
+      ]
     },
     {
       "route": "/admin",
-      "allowedRoles": ["admin"]
+      "allowedRoles": [
+        "admin"
+      ]
     },
     {
       "route": "/admin/*",
-      "allowedRoles": ["admin"]
+      "allowedRoles": [
+        "admin"
+      ]
     },
     {
       "route": "/api/orders*",
-      "allowedRoles": ["admin"]
+      "allowedRoles": [
+        "admin"
+      ]
     },
     {
       "route": "/api/dashboard*",
-      "allowedRoles": ["admin"]
+      "allowedRoles": [
+        "admin"
+      ]
     },
     {
       "route": "/api/customers*",
-      "allowedRoles": ["admin"]
+      "allowedRoles": [
+        "admin"
+      ]
     },
     {
       "route": "/api/settings*",
-      "allowedRoles": ["admin"]
+      "allowedRoles": [
+        "admin"
+      ]
     },
     {
       "route": "/api/sync-timer*",
-      "allowedRoles": ["anonymous"]
+      "allowedRoles": [
+        "anonymous"
+      ]
     },
     {
       "route": "/api/sync*",
-      "allowedRoles": ["admin"]
+      "allowedRoles": [
+        "admin"
+      ]
     },
     {
       "route": "/api/products-markup*",
-      "allowedRoles": ["admin"]
+      "allowedRoles": [
+        "admin"
+      ]
     },
     {
       "route": "/api/categories*",
-      "allowedRoles": ["admin"]
+      "allowedRoles": [
+        "admin"
+      ]
     },
     {
       "route": "/api/analytics*",
-      "allowedRoles": ["admin"]
+      "allowedRoles": [
+        "admin"
+      ]
+    },
+    {
+      "route": "/api/sync-images-invid*",
+      "allowedRoles": [
+        "admin"
+      ]
     },
     {
       "route": "/api/banners",
-      "methods": ["POST"],
-      "allowedRoles": ["admin"]
+      "methods": [
+        "POST"
+      ],
+      "allowedRoles": [
+        "admin"
+      ]
     },
     {
       "route": "/api/health*",
-      "allowedRoles": ["admin"]
+      "allowedRoles": [
+        "admin"
+      ]
     }
   ],
   "responseOverrides": {
