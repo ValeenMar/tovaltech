@@ -1,8 +1,10 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { useRef } from 'react';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
-const STORAGE_KEY = 'tovaltech_cart';
+const GUEST_STORAGE_KEY = 'tovaltech_cart_guest';
 
 function toPositiveInt(value, fallback = 0) {
   const parsed = Number.parseInt(String(value), 10);
@@ -31,9 +33,9 @@ function sanitizeItem(raw) {
   };
 }
 
-function loadCart() {
+function loadCart(storageKey) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed)
       ? parsed.map(sanitizeItem).filter(Boolean)
@@ -43,15 +45,128 @@ function loadCart() {
   }
 }
 
-export function CartProvider({ children }) {
-  const [cartItems, setCartItems] = useState(() => loadCart());
+function saveCart(storageKey, items) {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(items));
+  } catch {
+    // Ignore storage quota/unavailable errors.
+  }
+}
 
-  // Sincronizar con localStorage cada vez que cambie el carrito
+function removeCart(storageKey) {
+  try {
+    localStorage.removeItem(storageKey);
+  } catch {
+    // Ignore storage quota/unavailable errors.
+  }
+}
+
+function getUserCartKey(userId) {
+  return `tovaltech_cart_user_${userId}`;
+}
+
+function mergeItems(base, incoming) {
+  const map = new Map();
+
+  const addOne = (raw) => {
+    const item = sanitizeItem(raw);
+    if (!item) return;
+
+    const existing = map.get(item.id);
+    if (!existing) {
+      map.set(item.id, item);
+      return;
+    }
+
+    const mergedStock = toStock(item.stock) ?? toStock(existing.stock);
+    const nextQty = clampByStock(existing.quantity + item.quantity, mergedStock);
+    if (nextQty <= 0) {
+      map.delete(item.id);
+      return;
+    }
+
+    map.set(item.id, {
+      ...existing,
+      ...item,
+      stock: mergedStock,
+      quantity: nextQty,
+    });
+  };
+
+  (base || []).forEach(addOne);
+  (incoming || []).forEach(addOne);
+  return Array.from(map.values());
+}
+
+export function CartProvider({ children }) {
+  const { authUser, loading: authLoading } = useAuth();
+  const [cartItems, setCartItems] = useState(() => loadCart(GUEST_STORAGE_KEY));
+  const prevUserIdRef = useRef(undefined);
+
+  const currentUserId = authUser?.id ?? null;
+  const activeStorageKey = currentUserId ? getUserCartKey(currentUserId) : GUEST_STORAGE_KEY;
+
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cartItems));
-    } catch { /* quota exceeded u otros errores → ignorar silenciosamente */ }
-  }, [cartItems]);
+    if (authLoading) return;
+
+    const prevUserId = prevUserIdRef.current;
+    const firstInit = prevUserId === undefined;
+
+    if (firstInit) {
+      if (currentUserId) {
+        const userKey = getUserCartKey(currentUserId);
+        const userItems = loadCart(userKey);
+        const guestItems = loadCart(GUEST_STORAGE_KEY);
+        const merged = mergeItems(userItems, guestItems);
+        setCartItems(merged);
+        saveCart(userKey, merged);
+      } else {
+        setCartItems(loadCart(GUEST_STORAGE_KEY));
+      }
+
+      prevUserIdRef.current = currentUserId;
+      return;
+    }
+
+    if (prevUserId === currentUserId) return;
+
+    // Logout: mantener continuidad pasando el carrito de cuenta a invitado.
+    if (prevUserId && !currentUserId) {
+      const guestItems = loadCart(GUEST_STORAGE_KEY);
+      const mergedGuest = mergeItems(guestItems, cartItems);
+      setCartItems(mergedGuest);
+      saveCart(GUEST_STORAGE_KEY, mergedGuest);
+      prevUserIdRef.current = currentUserId;
+      return;
+    }
+
+    // Login: merge carrito invitado + carrito previo de la cuenta.
+    if (!prevUserId && currentUserId) {
+      const userKey = getUserCartKey(currentUserId);
+      const userItems = loadCart(userKey);
+      const guestItems = loadCart(GUEST_STORAGE_KEY);
+      const merged = mergeItems(userItems, guestItems);
+      setCartItems(merged);
+      saveCart(userKey, merged);
+      removeCart(GUEST_STORAGE_KEY);
+      prevUserIdRef.current = currentUserId;
+      return;
+    }
+
+    // Cambio entre cuentas.
+    if (prevUserId && currentUserId && prevUserId !== currentUserId) {
+      const nextItems = loadCart(getUserCartKey(currentUserId));
+      setCartItems(nextItems);
+      prevUserIdRef.current = currentUserId;
+    }
+  }, [authLoading, currentUserId, cartItems]);
+
+  // Persistencia automática en el storage activo (guest o user_<id>).
+  useEffect(() => {
+    if (authLoading) return;
+    if (prevUserIdRef.current !== currentUserId) return;
+    saveCart(activeStorageKey, cartItems);
+  }, [cartItems, activeStorageKey, authLoading, currentUserId]);
 
   const addToCart = (product) => {
     setCartItems(prev => {

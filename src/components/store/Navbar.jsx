@@ -74,6 +74,10 @@ export default function Navbar() {
             {/* Perfil / Auth */}
             {isLogged ? (
               <div className="hidden sm:flex items-center gap-1">
+                <Link to="/mis-datos?tab=pedidos"
+                  className="text-xs font-medium text-slate-500 hover:text-slate-700 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors">
+                  Pedidos
+                </Link>
                 <Link to="/mis-datos"
                   className="flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors px-3 py-2 rounded-lg">
                   <UserIcon className="w-4 h-4" />
@@ -125,13 +129,14 @@ export default function Navbar() {
           </Link>
         ))}
         {isLogged ? (
-          <>
-            <Link to="/mis-datos" className="text-sm text-blue-600 ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-3">
+            <Link to="/mis-datos?tab=pedidos" className="text-sm text-gray-500">Pedidos</Link>
+            <Link to="/mis-datos" className="text-sm text-blue-600 flex items-center gap-1">
               <UserIcon className="w-3.5 h-3.5" />
               {firstName}
             </Link>
             <button onClick={logout} className="text-sm text-gray-400">Salir</button>
-          </>
+          </div>
         ) : (
           <div className="ml-auto flex items-center gap-3">
             <Link to="/ingresar" className="text-sm text-gray-500">Ingresar</Link>

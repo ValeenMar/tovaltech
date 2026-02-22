@@ -42,9 +42,9 @@ function PageLoader() {
 export default function App() {
   return (
     <AppProvider>
-      <CartProvider>
-        <UserProvider>
-          <AuthProvider>
+      <AuthProvider>
+        <CartProvider>
+          <UserProvider>
             <BrowserRouter>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
@@ -79,9 +79,9 @@ export default function App() {
                 </Routes>
               </Suspense>
             </BrowserRouter>
-          </AuthProvider>
-        </UserProvider>
-      </CartProvider>
+          </UserProvider>
+        </CartProvider>
+      </AuthProvider>
     </AppProvider>
   );
 }

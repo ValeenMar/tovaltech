@@ -5,6 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from '../../context/CartContext';
 import { useUser } from '../../context/UserContext';
+import { useAuth } from '../../context/AuthContext';
 import { getCartShipping, ZONES, FREE_SHIPPING_THRESHOLD } from '../../utils/shipping';
 import { WA_NUMBER, TRANSFER_DISCOUNT_PCT } from '../../config/constants';
 
@@ -36,6 +37,7 @@ function buildWAMessage(form, cartItems, shipping, total) {
 export default function Checkout() {
   const { cartItems, cartTotal, clearCart } = useCart();
   const { user, saveUser, hasSavedData }    = useUser();
+  const { isLogged } = useAuth();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -48,6 +50,8 @@ export default function Checkout() {
   const [savePrompt, setSavePrompt] = useState(false); // mostrar "¿guardar datos?"
   const [dataSaved,  setDataSaved]  = useState(false);
   const [pendingInitPoint, setPendingInitPoint] = useState('');
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [accountSyncMsg, setAccountSyncMsg] = useState('');
 
   // Pre-llenar con datos guardados
   useEffect(() => {
@@ -63,6 +67,77 @@ export default function Checkout() {
       });
     }
   }, [user]);
+
+  // Si hay cuenta logueada, prellenar desde perfil server-side.
+  useEffect(() => {
+    if (!isLogged) return;
+
+    let cancelled = false;
+    const run = async () => {
+      setAccountLoading(true);
+      try {
+        const res = await fetch('/api/account-profile', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data?.ok || !data.profile || cancelled) return;
+
+        const profile = {
+          name: data.profile.name ?? '',
+          lastName: data.profile.lastName ?? '',
+          email: data.profile.email ?? '',
+          phone: data.profile.phone ?? '',
+          zone: data.profile.zone ?? 'CABA',
+          address: data.profile.address ?? '',
+          city: data.profile.city ?? '',
+        };
+
+        setForm((prev) => {
+          // Si el usuario ya empezó a escribir, no pisamos su edición.
+          const alreadyEdited = Boolean(prev.name || prev.email || prev.phone || prev.address);
+          return alreadyEdited ? prev : profile;
+        });
+        saveUser(profile);
+      } catch {
+        // Silent fallback: se mantiene localStorage.
+      } finally {
+        if (!cancelled) setAccountLoading(false);
+      }
+    };
+
+    run();
+    return () => { cancelled = true; };
+  }, [isLogged, saveUser]);
+
+  const syncAccountProfile = async () => {
+    if (!isLogged) return true;
+    try {
+      const res = await fetch('/api/account-profile', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        setAccountSyncMsg('Guardamos localmente, pero no se pudo sincronizar tu perfil de cuenta.');
+        return false;
+      }
+      const data = await res.json();
+      if (!data?.ok) {
+        setAccountSyncMsg('Guardamos localmente, pero no se pudo sincronizar tu perfil de cuenta.');
+        return false;
+      }
+      if (data.profile) {
+        saveUser(data.profile);
+      } else {
+        saveUser(form);
+      }
+      setAccountSyncMsg('');
+      return true;
+    } catch {
+      setAccountSyncMsg('Guardamos localmente, pero no se pudo sincronizar tu perfil de cuenta.');
+      return false;
+    }
+  };
 
   const shipping = useMemo(() => getCartShipping(cartItems, form.zone), [cartItems, form.zone]);
   const total    = cartTotal + (shipping.canShip ? shipping.cost : 0);
@@ -94,6 +169,12 @@ export default function Checkout() {
     if (!isFormValid) return;
     setMpLoading(true);
     setMpError(null);
+    setAccountSyncMsg('');
+
+    // En usuarios logueados, sincronizamos perfil siempre antes de pagar.
+    saveUser(form);
+    await syncAccountProfile();
+
     try {
       const quoteRes = await fetch('/api/checkout-quote', {
         method: 'POST',
@@ -127,9 +208,15 @@ export default function Checkout() {
       const { init_point } = await prefRes.json();
       setPendingInitPoint(init_point);
 
-      // Antes de redirigir, preguntar si guardar datos
-      if (!hasSavedData || formChanged) setSavePrompt(true);
-      else window.location.href = init_point;
+      // En cuenta logueada no preguntamos: ya quedó guardado.
+      if (isLogged) {
+        window.location.href = init_point;
+      } else if (!hasSavedData || formChanged) {
+        // Invitado: antes de redirigir, preguntar si guardar datos.
+        setSavePrompt(true);
+      } else {
+        window.location.href = init_point;
+      }
     } catch (err) {
       const code = String(err.message || '');
       if (code.includes('insufficient_stock') || code.includes('quote_unavailable')) {
@@ -162,7 +249,12 @@ export default function Checkout() {
   const handleWhatsApp = () => {
     const msg = buildWAMessage(form, cartItems, shipping, total);
     window.open(`https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
-    if (!hasSavedData && isFormValid) setSavePrompt(true);
+    saveUser(form);
+    if (isLogged) {
+      syncAccountProfile();
+    } else if (!hasSavedData && isFormValid) {
+      setSavePrompt(true);
+    }
   };
 
   const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }));
@@ -179,10 +271,16 @@ export default function Checkout() {
       </div>
 
       {/* Banner datos pre-llenados */}
+      {isLogged && accountLoading && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-6 text-sm text-blue-700">
+          Sincronizando tus datos de cuenta...
+        </div>
+      )}
+
       {hasSavedData && !formChanged && (
         <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-6 flex items-center justify-between gap-3">
           <p className="text-sm text-green-700">
-            ✅ <strong>Tus datos están pre-llenados</strong> con la información guardada en este dispositivo.
+            ✅ <strong>Tus datos están pre-llenados</strong> {isLogged ? 'desde tu cuenta y este dispositivo.' : 'con la información guardada en este dispositivo.'}
           </p>
           <Link to="/mis-datos" className="text-xs text-green-600 underline whitespace-nowrap">Editar</Link>
         </div>
@@ -194,10 +292,21 @@ export default function Checkout() {
           <p className="text-sm text-blue-700">
             ✏️ Modificaste tus datos. ¿Querés actualizar los guardados?
           </p>
-          <button onClick={() => { saveUser(form); setDataSaved(true); }}
+          <button
+            onClick={async () => {
+              saveUser(form);
+              if (isLogged) await syncAccountProfile();
+              setDataSaved(true);
+            }}
             className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold whitespace-nowrap">
             {dataSaved ? '✅ Guardado' : 'Actualizar'}
           </button>
+        </div>
+      )}
+
+      {accountSyncMsg && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-6 text-sm text-amber-700">
+          {accountSyncMsg}
         </div>
       )}
 
@@ -207,7 +316,7 @@ export default function Checkout() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h3 className="font-bold text-gray-800 mb-2">💾 ¿Guardamos tus datos?</h3>
             <p className="text-sm text-gray-500 mb-5">
-              La próxima vez que compres, el formulario se va a llenar solo. Tus datos se guardan solo en este dispositivo.
+              La próxima vez que compres, el formulario se va a llenar solo. Tus datos se guardan en este dispositivo.
             </p>
             <div className="flex gap-3">
               <button onClick={handleSkipAndPay}

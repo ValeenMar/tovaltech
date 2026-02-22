@@ -39,6 +39,10 @@ async function getUsersSchema(pool, { force = false } = {}) {
     hasConfirmed: cols.has('confirmed'),
     hasConfirmToken: cols.has('confirm_token'),
     hasConfirmExpires: cols.has('confirm_expires'),
+    hasPhone: cols.has('phone'),
+    hasZone: cols.has('zone'),
+    hasAddress: cols.has('address'),
+    hasCity: cols.has('city'),
     hasUpdatedAt: cols.has('updated_at'),
   };
 
