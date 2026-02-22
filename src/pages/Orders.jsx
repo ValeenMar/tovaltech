@@ -3,6 +3,7 @@
 // Lee pedidos reales de MercadoPago y permite cambiar su estado.
 
 import { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import StatusBadge from '../components/ui/StatusBadge'
 
 // ── Config de estados internos ────────────────────────────────────────────────
@@ -23,6 +24,11 @@ const fmtARS = (n) => n != null
 const fmtDate = (d) => d
   ? new Date(d).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
   : '—'
+
+function ModalPortal({ children }) {
+  if (typeof document === 'undefined') return null
+  return createPortal(children, document.body)
+}
 
 // ── Modal detalle de pedido ────────────────────────────────────────────────────
 function OrderModal({ order, onClose, onStatusChange }) {
@@ -51,84 +57,86 @@ function OrderModal({ order, onClose, onStatusChange }) {
   const cfg = STATUS_MAP[order.status] ?? STATUS_MAP['pending']
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-         onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden"
-           onClick={e => e.stopPropagation()}>
+    <ModalPortal>
+      <div className="fixed inset-0 z-[140] bg-slate-950/30 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
+           onClick={onClose}>
+        <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[92vh] my-8 flex flex-col"
+             onClick={e => e.stopPropagation()}>
 
-        {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-start">
-          <div>
-            <h3 className="font-bold text-gray-800">Pedido #{order.id}</h3>
-            <p className="text-xs text-gray-400 mt-0.5">MP: {order.mp_payment_id}</p>
-          </div>
-          <StatusBadge status={cfg.badge} text={cfg.label} />
-        </div>
-
-        <div className="px-6 py-5 space-y-4">
-          {/* Comprador */}
-          <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-1.5 text-sm">
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">👤 Comprador</h4>
-            <p className="font-semibold text-gray-800">{order.buyer_name} {order.buyer_lastname}</p>
-            <p className="text-gray-500">{order.buyer_email}</p>
-            {order.buyer_phone   && <p className="text-gray-500">📱 {order.buyer_phone}</p>}
-            {order.buyer_address && <p className="text-gray-500">📍 {order.buyer_address}, {order.buyer_city} ({order.buyer_zone})</p>}
-          </div>
-
-          {/* Productos */}
-          {order.items?.length > 0 && (
+          {/* Header */}
+          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-start shrink-0">
             <div>
-              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">🛒 Productos</h4>
-              <div className="space-y-1.5">
-                {order.items.map((item, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span className="text-gray-700">{item.title} × {item.quantity}</span>
-                    <span className="font-semibold text-gray-800">{fmtARS(item.unit_price * item.quantity)}</span>
-                  </div>
+              <h3 className="font-bold text-gray-800">Pedido #{order.id}</h3>
+              <p className="text-xs text-gray-400 mt-0.5">MP: {order.mp_payment_id}</p>
+            </div>
+            <StatusBadge status={cfg.badge} text={cfg.label} />
+          </div>
+
+          <div className="px-6 py-5 space-y-4 overflow-y-auto">
+            {/* Comprador */}
+            <div className="bg-gray-50 rounded-xl px-4 py-3 space-y-1.5 text-sm">
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">👤 Comprador</h4>
+              <p className="font-semibold text-gray-800">{order.buyer_name} {order.buyer_lastname}</p>
+              <p className="text-gray-500">{order.buyer_email}</p>
+              {order.buyer_phone   && <p className="text-gray-500">📱 {order.buyer_phone}</p>}
+              {order.buyer_address && <p className="text-gray-500">📍 {order.buyer_address}, {order.buyer_city} ({order.buyer_zone})</p>}
+            </div>
+
+            {/* Productos */}
+            {order.items?.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">🛒 Productos</h4>
+                <div className="space-y-1.5">
+                  {order.items.map((item, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span className="text-gray-700">{item.title} × {item.quantity}</span>
+                      <span className="font-semibold text-gray-800">{fmtARS(item.unit_price * item.quantity)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Total */}
+            <div className="flex justify-between items-center border-t border-gray-100 pt-3">
+              <span className="text-sm font-semibold text-gray-600">Total</span>
+              <span className="text-lg font-bold text-green-600">{fmtARS(order.total_ars)}</span>
+            </div>
+
+            {/* Cambiar estado */}
+            <div>
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">🔄 Cambiar estado</h4>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                {STATUS_OPTIONS.map(opt => (
+                  <button key={opt.value}
+                    onClick={() => setStatus(opt.value)}
+                    className={`px-2 py-2 rounded-lg text-xs font-semibold border-2 transition-all
+                      ${status === opt.value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
+                    {opt.label}
+                  </button>
                 ))}
               </div>
             </div>
-          )}
 
-          {/* Total */}
-          <div className="flex justify-between items-center border-t border-gray-100 pt-3">
-            <span className="text-sm font-semibold text-gray-600">Total</span>
-            <span className="text-lg font-bold text-green-600">{fmtARS(order.total_ars)}</span>
+            {error && <p className="text-xs text-red-500">{error}</p>}
           </div>
 
-          {/* Cambiar estado */}
-          <div>
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">🔄 Cambiar estado</h4>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-              {STATUS_OPTIONS.map(opt => (
-                <button key={opt.value}
-                  onClick={() => setStatus(opt.value)}
-                  className={`px-2 py-2 rounded-lg text-xs font-semibold border-2 transition-all
-                    ${status === opt.value
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+          <div className="px-6 py-4 border-t border-gray-100 flex gap-2 justify-end shrink-0">
+            <button onClick={onClose}
+              className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 font-medium">
+              Cerrar
+            </button>
+            <button onClick={handleSave} disabled={saving || status === order.status}
+              className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg font-semibold
+                        hover:bg-blue-700 disabled:opacity-40">
+              {saving ? 'Guardando...' : 'Guardar estado'}
+            </button>
           </div>
-
-          {error && <p className="text-xs text-red-500">{error}</p>}
-        </div>
-
-        <div className="px-6 py-4 border-t border-gray-100 flex gap-2 justify-end">
-          <button onClick={onClose}
-            className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 font-medium">
-            Cerrar
-          </button>
-          <button onClick={handleSave} disabled={saving || status === order.status}
-            className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg font-semibold
-                       hover:bg-blue-700 disabled:opacity-40">
-            {saving ? 'Guardando...' : 'Guardar estado'}
-          </button>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }
 

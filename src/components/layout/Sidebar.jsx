@@ -2,21 +2,25 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 
 const navItems = [
-  { key: 'dashboard', path: '/admin', icon: '◉', label: 'Dashboard', section: 'Principal' },
-  { key: 'orders', path: '/admin/orders', icon: '◌', label: 'Pedidos', section: 'Principal' },
-  { key: 'products', path: '/admin/products', icon: '△', label: 'Productos', section: 'Principal' },
-  { key: 'categories', path: '/admin/categories', icon: '◇', label: 'Categorias', section: 'Principal' },
-  { key: 'banners', path: '/admin/banners', icon: '▣', label: 'Inicio', section: 'Principal' },
-  { key: 'customers', path: '/admin/customers', icon: '◍', label: 'Clientes', section: 'Sistema' },
-  { key: 'invoices', path: '/admin/invoices', icon: '▤', label: 'Facturas', section: 'Sistema' },
-  { key: 'analytics', path: '/admin/analytics', icon: '▴', label: 'Analiticas', section: 'Sistema' },
-  { key: 'settings', path: '/admin/settings', icon: '⚙', label: 'Configuracion', section: 'Sistema' },
+  { key: 'dashboard', path: '/admin', icon: '◉', ultraIcon: '⬢', label: 'Dashboard', section: 'Principal' },
+  { key: 'orders', path: '/admin/orders', icon: '◌', ultraIcon: '✶', label: 'Pedidos', section: 'Principal' },
+  { key: 'products', path: '/admin/products', icon: '△', ultraIcon: '⬡', label: 'Productos', section: 'Principal' },
+  { key: 'categories', path: '/admin/categories', icon: '◇', ultraIcon: '✧', label: 'Categorias', section: 'Principal' },
+  { key: 'banners', path: '/admin/banners', icon: '▣', ultraIcon: '◈', label: 'Inicio', section: 'Principal' },
+  { key: 'customers', path: '/admin/customers', icon: '◍', ultraIcon: '⎈', label: 'Clientes', section: 'Sistema' },
+  { key: 'invoices', path: '/admin/invoices', icon: '▤', ultraIcon: '⌬', label: 'Facturas', section: 'Sistema' },
+  { key: 'analytics', path: '/admin/analytics', icon: '▴', ultraIcon: '⬣', label: 'Analiticas', section: 'Sistema' },
+  { key: 'settings', path: '/admin/settings', icon: '⚙', ultraIcon: '⛭', label: 'Configuracion', section: 'Sistema' },
 ];
 
-function TovalTechLogo({ collapsed }) {
+function TovalTechLogo({ collapsed, ultraMode }) {
   return (
     <div className="flex items-center gap-3">
-      <div className="w-10 h-10 rounded-xl bg-white/10 ring-1 ring-white/20 flex items-center justify-center shadow-lg shadow-black/20 flex-shrink-0">
+      <div className={`w-10 h-10 rounded-xl ring-1 flex items-center justify-center shadow-lg shadow-black/20 flex-shrink-0 ${
+        ultraMode
+          ? 'bg-rose-500/15 ring-rose-300/45 shadow-[0_0_18px_rgba(255,74,102,0.45)] neon-blink'
+          : 'bg-white/10 ring-white/20'
+      }`}>
         <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="none"
              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="9" y="9" width="6" height="6" rx="1" />
@@ -28,7 +32,7 @@ function TovalTechLogo({ collapsed }) {
       {!collapsed && (
         <div>
           <p className="text-[17px] font-bold leading-none text-white tracking-tight">
-            Toval<span className="text-cyan-300">Tech</span>
+            Toval<span className={ultraMode ? 'text-rose-300' : 'text-cyan-300'}>Tech</span>
           </p>
           <p className="text-[10px] tracking-[0.18em] uppercase text-white/45 mt-1">Admin Control</p>
         </div>
@@ -40,7 +44,7 @@ function TovalTechLogo({ collapsed }) {
 export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { sidebarOpen, setSidebarOpen } = useApp();
+  const { sidebarOpen, setSidebarOpen, ultraMode } = useApp();
   const sections = [...new Set(navItems.map((item) => item.section))];
 
   const isActive = (item) => {
@@ -71,7 +75,7 @@ export default function Sidebar() {
         `}
       >
         <div className="px-4 pt-5 pb-4 border-b border-white/10 shrink-0">
-          <TovalTechLogo collapsed={!sidebarOpen} />
+          <TovalTechLogo collapsed={!sidebarOpen} ultraMode={ultraMode} />
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -95,7 +99,7 @@ export default function Sidebar() {
                     }`}
                   >
                     <span className="w-6 h-6 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center text-[12px] font-bold">
-                      {item.icon}
+                      {ultraMode ? item.ultraIcon : item.icon}
                     </span>
                     {sidebarOpen && <span className="truncate">{item.label}</span>}
                   </button>
@@ -117,7 +121,7 @@ export default function Sidebar() {
             }`}
           >
             <span className="w-6 h-6 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center text-[12px] font-bold">
-              △
+              {ultraMode ? '⬢' : '△'}
             </span>
             {sidebarOpen && <span className="flex-1">Ver tienda</span>}
           </a>
@@ -133,7 +137,7 @@ export default function Sidebar() {
               }`}
           >
             <span className="w-6 h-6 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center text-[12px] font-bold">
-              ◉
+              {ultraMode ? '✶' : '◉'}
             </span>
             {sidebarOpen && <span className="flex-1">Ver inicio</span>}
           </a>

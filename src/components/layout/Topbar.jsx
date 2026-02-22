@@ -213,7 +213,7 @@ function CommandPalette({
 export default function Topbar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { sidebarOpen, setSidebarOpen } = useApp();
+  const { sidebarOpen, setSidebarOpen, ultraMode, toggleUltraMode } = useApp();
   const title = pageTitles[location.pathname] ?? 'Admin';
 
   const [searchValue, setSearchValue] = useState('');
@@ -376,7 +376,7 @@ export default function Topbar() {
 
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="hidden lg:flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 pulse-live" />
+            <span className={`w-2 h-2 rounded-full ${ultraMode ? 'pulse-live-danger bg-rose-500' : 'bg-emerald-500 pulse-live'}`} />
             <span className="text-[11px] font-semibold text-slate-500">Flujo activo</span>
           </div>
 
@@ -391,12 +391,25 @@ export default function Topbar() {
 
           <div className="relative">
             <button
+              onClick={toggleUltraMode}
+              className={`mr-2 relative w-9 h-9 rounded-xl border transition-colors ${
+                ultraMode
+                  ? 'border-rose-300 bg-rose-50 text-rose-600 shadow-[0_0_18px_rgba(255,74,102,0.45)] neon-blink'
+                  : 'border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-300'
+              }`}
+              title={ultraMode ? 'Desactivar modo ultra pro' : 'Activar modo ultra pro'}
+              aria-label="Cambiar modo visual"
+            >
+              {ultraMode ? '⛧' : '✦'}
+            </button>
+
+            <button
               onClick={handleBell}
               className="relative w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-300 transition-colors"
               title="Actividad"
               aria-label="Actividad"
             >
-              ⎋
+              {ultraMode ? '◈' : '⎋'}
               {notifCount > 0 && (
                 <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
                   {notifCount > 9 ? '9+' : notifCount}

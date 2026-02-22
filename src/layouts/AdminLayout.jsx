@@ -2,9 +2,11 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
+import { useApp } from '../context/AppContext';
 
 export default function AdminLayout() {
   const location = useLocation();
+  const { ultraMode } = useApp();
   const [status, setStatus] = useState('checking'); // checking | ok | unauthorized
 
   useEffect(() => {
@@ -43,7 +45,7 @@ export default function AdminLayout() {
   }
 
   return (
-    <div className="admin-shell h-screen overflow-hidden">
+    <div className={`admin-shell h-screen overflow-hidden ${ultraMode ? 'ultra-pro-mode' : ''}`}>
       <div className="admin-bg-grid" />
       <div className="relative z-10 flex h-full">
         <Sidebar />
