@@ -31,16 +31,34 @@ async function getMarkupSettings(pool, forceRefresh = false) {
   const settingsRes = await pool.request().query(
     `SELECT value FROM dbo.tovaltech_settings WHERE key_name = 'global_markup_pct'`
   );
+  // Traemos TODAS las categorías (con y sin markup) para poder resolver herencia padre→hijo
   const catRes = await pool.request().query(
-    `SELECT name, markup_pct FROM ${CATEGORY_TABLE} WHERE markup_pct IS NOT NULL`
+    `SELECT id, name, markup_pct, parent_id FROM ${CATEGORY_TABLE}`
   );
 
   const globalMarkupPct = parseFloat(settingsRes.recordset?.[0]?.value ?? '0');
-  const categoryMarkup  = {};
+
+  // Primero indexar por id para resolver herencia
+  const catById = {};
   for (const row of catRes.recordset || []) {
-    const key = String(row.name ?? '').trim();
-    const pct = parseFloat(row.markup_pct);
-    if (key && Number.isFinite(pct)) categoryMarkup[key] = pct / 100;
+    catById[row.id] = { name: String(row.name ?? '').trim(), markup_pct: row.markup_pct, parent_id: row.parent_id };
+  }
+
+  // Resolver markup efectivo por nombre: propio → padre → null (caerá a global en runtime)
+  const categoryMarkup = {};
+  for (const cat of Object.values(catById)) {
+    if (!cat.name) continue;
+    let pct = cat.markup_pct !== null && cat.markup_pct !== undefined ? parseFloat(cat.markup_pct) : null;
+    // Si la subcategoría no tiene markup propio, sube al padre
+    if ((pct === null || !Number.isFinite(pct)) && cat.parent_id) {
+      const parent = catById[cat.parent_id];
+      if (parent && parent.markup_pct !== null && parent.markup_pct !== undefined) {
+        pct = parseFloat(parent.markup_pct);
+      }
+    }
+    if (pct !== null && Number.isFinite(pct)) {
+      categoryMarkup[cat.name] = pct / 100;
+    }
   }
 
   _markupCache     = { globalMarkup: globalMarkupPct / 100, categoryMarkup };
