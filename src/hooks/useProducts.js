@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useApp } from '../context/AppContext';
 import { apiFetch, buildQuery } from '../lib/apiClient';
 
 /**
@@ -8,12 +7,11 @@ import { apiFetch, buildQuery } from '../lib/apiClient';
  * Flujo:
  *  1. Intenta GET /api/products (Azure Function → Azure SQL)
  *     La API devuelve: { items: [], total, limit, offset }
- *  2. Si la API falla, filtra los productos del AppContext (fallback local).
+ *  2. Si la API falla, devuelve colección vacía y error.
  *
  * Retorna: { products, total, loading, error, fromApi }
  */
 export function useProducts(filters = {}) {
-  const { products: contextProducts } = useApp();
   const [products, setProducts] = useState([]);
   const [total, setTotal]       = useState(0);
   const [loading, setLoading]   = useState(true);
@@ -53,24 +51,12 @@ export function useProducts(filters = {}) {
       .catch((err) => {
         if (err.name === 'AbortError') return;
 
-        // Fallback silencioso al context
-        let fallback = contextProducts.filter(p => p.stock > 0);
-        if (filters.categoria) {
-          fallback = fallback.filter(p => p.category === filters.categoria);
-        }
-        if (filters.buscar) {
-          const term = filters.buscar.toLowerCase();
-          fallback = fallback.filter(p =>
-            p.name.toLowerCase().includes(term) ||
-            (p.brand ?? '').toLowerCase().includes(term)
-          );
-        }
-
-        setProducts(fallback);
-        setTotal(fallback.length);
+        // Si la API falla, devolvemos vacío en vez de usar contexto legacy inexistente.
+        setProducts([]);
+        setTotal(0);
         setFromApi(false);
         setLoading(false);
-        setError(null);
+        setError(err.message || 'products_fetch_failed');
       });
 
     return () => controller.abort();

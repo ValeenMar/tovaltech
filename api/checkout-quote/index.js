@@ -5,6 +5,11 @@ const connectDB = require('../db');
 const { calculateShipping, normalizeZone } = require('../_shared/shipping');
 const { sendJson } = require('../_shared/http');
 const { getTraceId, logWithTrace } = require('../_shared/trace');
+const {
+  QuoteReservationError,
+  reserveQuoteStockAndInsert,
+  releaseExpiredQuotes,
+} = require('../_shared/quote-stock');
 
 const QUOTE_TTL_MIN = Number.parseInt(process.env.CHECKOUT_QUOTE_TTL_MIN || '20', 10);
 
@@ -64,6 +69,17 @@ module.exports = async function (context, req) {
     }
 
     const pool = await connectDB();
+    try {
+      const cleaned = await releaseExpiredQuotes(pool, 40);
+      if (cleaned.released > 0) {
+        logWithTrace(context, 'info', traceId, 'checkout_quote_expired_released', cleaned);
+      }
+    } catch (cleanupErr) {
+      logWithTrace(context, 'warn', traceId, 'checkout_quote_expired_release_failed', {
+        error: cleanupErr.message,
+      });
+    }
+
     const ids = [...itemsMap.keys()];
     const inClause = buildInClause(ids);
 
@@ -160,18 +176,13 @@ module.exports = async function (context, req) {
       .update(JSON.stringify(payload))
       .digest('hex');
 
-    await pool.request()
-      .input('quote_id', sql.NVarChar(64), quoteId)
-      .input('payload_json', sql.NVarChar(sql.MAX), JSON.stringify(payload))
-      .input('total_ars', sql.Int, total)
-      .input('expires_at', sql.DateTime2, expiresAt)
-      .input('request_fingerprint', sql.NVarChar(128), fingerprint)
-      .query(`
-        INSERT INTO dbo.tovaltech_checkout_quotes
-          (quote_id, payload_json, total_ars, expires_at, request_fingerprint, created_at)
-        VALUES
-          (@quote_id, @payload_json, @total_ars, @expires_at, @request_fingerprint, SYSUTCDATETIME())
-      `);
+    await reserveQuoteStockAndInsert(pool, {
+      quoteId,
+      payload,
+      totalArs: total,
+      expiresAt,
+      fingerprint,
+    });
 
     logWithTrace(context, 'info', traceId, 'checkout_quote_created', {
       quote_id: quoteId,
@@ -194,6 +205,23 @@ module.exports = async function (context, req) {
       },
     });
   } catch (err) {
+    if (err instanceof QuoteReservationError) {
+      logWithTrace(context, 'warn', traceId, 'checkout_quote_reservation_failed', {
+        error: err.code,
+        ...err.details,
+      });
+      sendJson(context, {
+        status: err.code === 'product_not_found' ? 404 : 400,
+        traceId,
+        body: {
+          error: err.code,
+          ...err.details,
+          trace_id: traceId,
+        },
+      });
+      return;
+    }
+
     logWithTrace(context, 'error', traceId, 'checkout_quote_failed', { error: err.message });
     sendJson(context, {
       status: 500,

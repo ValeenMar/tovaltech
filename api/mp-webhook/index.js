@@ -1,175 +1,196 @@
 /**
  * api/mp-webhook/index.js
  *
- * Recibe notificaciones de pago de MercadoPago (IPN / Webhooks).
- * Verifica la firma x-signature antes de procesar cualquier notificación.
- * Verifica el pago contra la API de MP y guarda el pedido en Azure SQL.
- *
- * Variables de entorno necesarias:
- *   MP_ACCESS_TOKEN   → Token de producción de MercadoPago
- *   MP_WEBHOOK_SECRET → Secret configurado en el panel de MP (Webhooks → secret)
+ * Recibe notificaciones de pago de Mercado Pago.
+ * Verifica firma x-signature, consulta el pago en MP y persiste el pedido.
+ * Si el pago termina en estado de rechazo/cancelación, libera la reserva de stock.
  */
 
-const connectDB  = require('../db');
-const crypto     = require('crypto');
+const crypto = require('crypto');
+const connectDB = require('../db');
+const { sendJson } = require('../_shared/http');
 const { getTraceId, logWithTrace } = require('../_shared/trace');
+const { releaseQuoteStock } = require('../_shared/quote-stock');
 
 const MP_PAYMENTS_URL = 'https://api.mercadopago.com/v1/payments';
+const ACTIVE_STATUSES = new Set(['approved', 'pending', 'in_process']);
+const RELEASE_STATUSES = new Set(['rejected', 'cancelled', 'refunded', 'charged_back']);
 
-// ── Verificación de firma HMAC-SHA256 ────────────────────────────────────────
-// MP envía en el header x-signature: ts=<timestamp>,v1=<hash>
-// El mensaje a firmar es: "id:<dataId>;request-id:<x-request-id>;ts:<ts>;"
-// Documentación: https://www.mercadopago.com.ar/developers/es/docs/your-integrations/notifications/webhooks
 function verifyMpSignature(req, dataId, secret) {
   try {
-    const xSignature  = req.headers['x-signature']  || '';
-    const xRequestId  = req.headers['x-request-id'] || '';
-
+    const xSignature = req.headers['x-signature'] || '';
+    const xRequestId = req.headers['x-request-id'] || '';
     if (!xSignature || !secret) return false;
 
-    // Parsear ts y v1 del header
     const parts = Object.fromEntries(
-      xSignature.split(',').map(part => {
+      xSignature.split(',').map((part) => {
         const [k, v] = part.split('=');
         return [k.trim(), v?.trim()];
-      })
+      }),
     );
 
-    const ts = parts['ts'];
-    const v1 = parts['v1'];
+    const ts = parts.ts;
+    const v1 = parts.v1;
     if (!ts || !v1) return false;
 
-    // Construir el mensaje tal como lo especifica MP
     const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
-
-    // Calcular HMAC
     const expected = crypto
       .createHmac('sha256', secret)
       .update(manifest)
       .digest('hex');
 
-    // Comparación en tiempo constante para evitar timing attacks
     return crypto.timingSafeEqual(
-      Buffer.from(v1,       'hex'),
-      Buffer.from(expected, 'hex')
+      Buffer.from(v1, 'hex'),
+      Buffer.from(expected, 'hex'),
     );
   } catch {
     return false;
   }
 }
 
+function getQuoteId(payment) {
+  return String(
+    payment?.external_reference
+      || payment?.metadata?.quote_id
+      || '',
+  ).trim();
+}
+
 module.exports = async function (context, req) {
   const traceId = getTraceId(req);
-  const headers = { 'content-type': 'application/json' };
-  const token   = process.env.MP_ACCESS_TOKEN;
-  const secret  = process.env.MP_WEBHOOK_SECRET;
+  const token = process.env.MP_ACCESS_TOKEN;
+  const secret = process.env.MP_WEBHOOK_SECRET;
 
-  // ── MP envía un GET de validación al activar el webhook ──────────────────
   if (req.method === 'GET') {
-    context.res = { status: 200, headers, body: { ok: true } };
+    sendJson(context, {
+      status: 200,
+      traceId,
+      body: { ok: true, trace_id: traceId },
+    });
     return;
   }
 
-  if (!token) {
-    logWithTrace(context, 'error', traceId, 'mp_webhook_missing_token');
-    context.res = { status: 500, headers, body: { error: 'config_missing' } };
+  if (!token || !secret) {
+    logWithTrace(context, 'error', traceId, 'mp_webhook_config_missing', {
+      token: Boolean(token),
+      secret: Boolean(secret),
+    });
+    sendJson(context, {
+      status: 500,
+      traceId,
+      body: { error: 'config_missing', trace_id: traceId },
+    });
     return;
   }
 
-  if (!secret) {
-    // Fail-closed: si falta el secret, NO se procesa el webhook.
-    logWithTrace(context, 'error', traceId, 'mp_webhook_missing_secret');
-    context.res = { status: 500, headers, body: { error: 'config_missing' } };
-    return;
-  }
+  const body = req.body || {};
+  const topic = body.type || req.query.topic;
+  const dataId = body.data?.id || req.query.id;
+  logWithTrace(context, 'info', traceId, 'mp_webhook_received', { topic, data_id: dataId });
 
-  // ── Leer notificación ────────────────────────────────────────────────────
-  const body   = req.body ?? {};
-  const topic  = body.type ?? req.query.topic;
-  const dataId = body.data?.id ?? req.query.id;
-
-  context.log.info('mp_webhook_received', { topic, dataId });
-
-  // Solo nos importan las notificaciones de pago
   if (topic !== 'payment' || !dataId) {
-    context.res = { status: 200, headers, body: { ignored: true } };
+    sendJson(context, {
+      status: 200,
+      traceId,
+      body: { ignored: true, trace_id: traceId },
+    });
     return;
   }
 
-  // ── Verificar firma (siempre) ─────────────────────────────────────────────
-  const valid = verifyMpSignature(req, dataId, secret);
-  if (!valid) {
-    logWithTrace(context, 'warn', traceId, 'mp_webhook_invalid_signature', { dataId });
-    context.res = { status: 200, headers, body: { error: 'invalid_signature' } };
+  if (!verifyMpSignature(req, dataId, secret)) {
+    logWithTrace(context, 'warn', traceId, 'mp_webhook_invalid_signature', { data_id: dataId });
+    sendJson(context, {
+      status: 200,
+      traceId,
+      body: { error: 'invalid_signature', trace_id: traceId },
+    });
     return;
   }
 
   try {
-    // ── Verificar el pago directamente con MP ────────────────────────────
     const mpRes = await fetch(`${MP_PAYMENTS_URL}/${dataId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
     if (!mpRes.ok) {
-      context.log.error('mp_payment_fetch_failed', { status: mpRes.status, dataId });
-      context.res = { status: 200, headers, body: { error: 'mp_fetch_failed' } };
+      logWithTrace(context, 'error', traceId, 'mp_payment_fetch_failed', {
+        data_id: dataId,
+        status: mpRes.status,
+      });
+      sendJson(context, {
+        status: 200,
+        traceId,
+        body: { error: 'mp_fetch_failed', trace_id: traceId },
+      });
       return;
     }
 
     const payment = await mpRes.json();
-    context.log.info('mp_payment_verified', { id: payment.id, status: payment.status });
+    const quoteId = getQuoteId(payment);
+    logWithTrace(context, 'info', traceId, 'mp_payment_verified', {
+      payment_id: payment.id,
+      mp_status: payment.status,
+      quote_id: quoteId || null,
+    });
 
-    // ── Solo guardar pagos aprobados o pendientes (ignorar rechazados) ────
-    if (!['approved', 'pending', 'in_process'].includes(payment.status)) {
-      context.res = { status: 200, headers, body: { ignored: true, mp_status: payment.status } };
+    if (RELEASE_STATUSES.has(payment.status) && quoteId) {
+      const pool = await connectDB();
+      const released = await releaseQuoteStock(pool, quoteId, `mp_${payment.status}`);
+      logWithTrace(context, released.released ? 'info' : 'warn', traceId, 'mp_quote_release_attempt', {
+        quote_id: quoteId,
+        mp_status: payment.status,
+        release_result: released.reason || 'released',
+      });
+    }
+
+    if (!ACTIVE_STATUSES.has(payment.status)) {
+      sendJson(context, {
+        status: 200,
+        traceId,
+        body: { ignored: true, mp_status: payment.status, trace_id: traceId },
+      });
       return;
     }
 
-    // ── Extraer datos del comprador desde los metadatos de la preferencia ─
-    const payer    = payment.payer ?? {};
-    const metadata = payment.metadata ?? {};
+    const payer = payment.payer || {};
+    const metadata = payment.metadata || {};
 
-    const buyerName     = payer.first_name    ?? metadata.buyer_name     ?? null;
-    const buyerLastname = payer.last_name      ?? metadata.buyer_lastname ?? null;
-    const buyerEmail    = payer.email          ?? null;
-    const buyerPhone    = payer.phone?.number  ?? null;
-    const buyerZone     = metadata.zone        ?? null;
-    const buyerAddress  = payer.address?.street_name ?? null;
-    const buyerCity     = metadata.city        ?? null;
+    const buyerName = payer.first_name || metadata.buyer_name || null;
+    const buyerLastname = payer.last_name || metadata.buyer_lastname || null;
+    const buyerEmail = payer.email || null;
+    const buyerPhone = payer.phone?.number || null;
+    const buyerZone = metadata.buyer_zone || metadata.zone || null;
+    const buyerAddress = payer.address?.street_name || null;
+    const buyerCity = metadata.buyer_city || metadata.city || null;
 
-    // Items: MP los guarda en additional_info
-    const items     = payment.additional_info?.items ?? [];
+    const items = payment.additional_info?.items || [];
     const itemsJson = JSON.stringify(items);
+    const totalArs = payment.transaction_amount || null;
+    const shippingCost = null;
 
-    const totalArs    = payment.transaction_amount ?? null;
-    const shippingCost = null; // MP no separa el shipping del total
-
-    // Estado interno según estado MP
     const statusMap = {
-      approved:   'paid',
-      pending:    'pending',
+      approved: 'paid',
+      pending: 'pending',
       in_process: 'pending',
     };
-    const internalStatus = statusMap[payment.status] ?? 'pending';
+    const internalStatus = statusMap[payment.status] || 'pending';
 
-    // ── Guardar en Azure SQL (upsert por mp_payment_id) ─────────────────
     const pool = await connectDB();
-
     await pool.request()
-      .input('mp_payment_id',    payment.id ? String(payment.id) : String(dataId))
+      .input('mp_payment_id', payment.id ? String(payment.id) : String(dataId))
       .input('mp_preference_id', payment.order?.id ? String(payment.order.id) : null)
-      .input('mp_status',        payment.status)
-      .input('status',           internalStatus)
-      .input('buyer_name',       buyerName)
-      .input('buyer_lastname',   buyerLastname)
-      .input('buyer_email',      buyerEmail)
-      .input('buyer_phone',      buyerPhone)
-      .input('buyer_zone',       buyerZone)
-      .input('buyer_address',    buyerAddress)
-      .input('buyer_city',       buyerCity)
-      .input('items_json',       itemsJson)
-      .input('total_ars',        totalArs)
-      .input('shipping_cost',    shippingCost)
+      .input('mp_status', payment.status)
+      .input('status', internalStatus)
+      .input('buyer_name', buyerName)
+      .input('buyer_lastname', buyerLastname)
+      .input('buyer_email', buyerEmail)
+      .input('buyer_phone', buyerPhone)
+      .input('buyer_zone', buyerZone)
+      .input('buyer_address', buyerAddress)
+      .input('buyer_city', buyerCity)
+      .input('items_json', itemsJson)
+      .input('total_ars', totalArs)
+      .input('shipping_cost', shippingCost)
       .input('raw_notification', JSON.stringify(payment).slice(0, 4000))
       .query(`
         MERGE dbo.tovaltech_orders AS t
@@ -197,21 +218,28 @@ module.exports = async function (context, req) {
           );
       `);
 
-    context.log.info('order_saved', { mp_payment_id: dataId, status: internalStatus });
+    logWithTrace(context, 'info', traceId, 'mp_order_saved', {
+      payment_id: payment.id,
+      internal_status: internalStatus,
+      quote_id: quoteId || null,
+    });
 
-    context.res = {
+    sendJson(context, {
       status: 200,
-      headers,
-      body: { success: true, mp_status: payment.status, internal_status: internalStatus },
-    };
-
+      traceId,
+      body: {
+        success: true,
+        mp_status: payment.status,
+        internal_status: internalStatus,
+        trace_id: traceId,
+      },
+    });
   } catch (err) {
-    context.log.error('mp_webhook_error', err.message);
-    // Devolvemos 200 siempre para que MP no reintente indefinidamente
-    context.res = {
+    logWithTrace(context, 'error', traceId, 'mp_webhook_error', { error: err.message });
+    sendJson(context, {
       status: 200,
-      headers,
-      body: { error: 'internal_error', message: err.message },
-    };
+      traceId,
+      body: { error: 'internal_error', trace_id: traceId },
+    });
   }
 };

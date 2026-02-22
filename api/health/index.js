@@ -3,13 +3,15 @@
 // Protegido con allowedRoles: ["admin"] en staticwebapp.config.json.
 
 const connectDB = require('../db');
-const { getTraceId } = require('../_shared/trace');
+const { sendJson } = require('../_shared/http');
+const { getTraceId, logWithTrace } = require('../_shared/trace');
 
 module.exports = async function (context, req) {
   const traceId = getTraceId(req);
+  const startedAt = Date.now();
   try {
     const pool = await connectDB();
-    const r    = await pool.request().query('SELECT 1 AS ok');
+    const r = await pool.request().query('SELECT 1 AS ok');
     const checks = {
       mp_access_token: Boolean(process.env.MP_ACCESS_TOKEN),
       mp_webhook_secret: Boolean(process.env.MP_WEBHOOK_SECRET),
@@ -21,27 +23,38 @@ module.exports = async function (context, req) {
       db_user: Boolean(process.env.DB_USER),
       db_password: Boolean(process.env.DB_PASSWORD),
     };
+    const optionalChecks = {
+      checkout_quote_ttl_min: Boolean(process.env.CHECKOUT_QUOTE_TTL_MIN),
+      openai_api_key: Boolean(process.env.OPENAI_API_KEY),
+      create_preference_rate_limit: Boolean(process.env.CREATE_PREFERENCE_RATE_LIMIT),
+    };
     const configOk = Object.values(checks).every(Boolean);
     const dbOk = r.recordset?.[0]?.ok === 1;
+    const latencyMs = Date.now() - startedAt;
 
-    context.res = {
+    sendJson(context, {
       status: 200,
-      headers: { 'content-type': 'application/json' },
+      traceId,
       body: {
         ok: dbOk && configOk,
         trace_id: traceId,
         db: dbOk,
         config_ok: configOk,
         checks,
+        optional_checks: optionalChecks,
+        runtime: {
+          node: process.version,
+          uptime_sec: Math.round(process.uptime()),
+        },
+        latency_ms: latencyMs,
       },
-    };
+    });
   } catch (err) {
-    context.log.error('health_check_failed', err.message);
-    context.res = {
+    logWithTrace(context, 'error', traceId, 'health_check_failed', { error: err.message });
+    sendJson(context, {
       status: 500,
-      headers: { 'content-type': 'application/json' },
-      // No exponemos el mensaje de error ni el stack al exterior
+      traceId,
       body: { ok: false, trace_id: traceId },
-    };
+    });
   }
 };

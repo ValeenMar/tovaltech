@@ -120,7 +120,10 @@ export default function Checkout() {
           buyer: form,
         }),
       });
-      if (!prefRes.ok) throw new Error(`HTTP ${prefRes.status}`);
+      if (!prefRes.ok) {
+        const prefErr = await prefRes.json().catch(() => ({}));
+        throw new Error(prefErr.error || `HTTP ${prefRes.status}`);
+      }
       const { init_point } = await prefRes.json();
       setPendingInitPoint(init_point);
 
@@ -128,7 +131,12 @@ export default function Checkout() {
       if (!hasSavedData || formChanged) setSavePrompt(true);
       else window.location.href = init_point;
     } catch (err) {
-      if (String(err.message).includes('cannot_ship')) {
+      const code = String(err.message || '');
+      if (code.includes('insufficient_stock') || code.includes('quote_unavailable')) {
+        setMpError('Algunos productos se quedaron sin stock. Revisá tu carrito y volvé a intentar.');
+      } else if (code.includes('quote_expired')) {
+        setMpError('La cotización venció. Intentá nuevamente para recalcular el pedido.');
+      } else if (String(err.message).includes('cannot_ship')) {
         setMpError('Este pedido requiere cotizacion especial de envio. Escribinos por WhatsApp.');
       } else {
         setMpError('No se pudo conectar con Mercado Pago. Proba con WhatsApp.');

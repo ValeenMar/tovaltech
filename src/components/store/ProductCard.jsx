@@ -68,6 +68,7 @@ function ProductCard({ product, priority = false }) {
       image_url: product.image_url ?? null,
       price:     product.price_ars,
       price_usd: product.price_usd,
+      stock:     product.stock,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 1800);

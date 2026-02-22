@@ -9,6 +9,9 @@
    - `MP_ACCESS_TOKEN`
    - `MP_WEBHOOK_SECRET`
    - `CRON_SECRET`
+   - `CHECKOUT_QUOTE_TTL_MIN`
+   - `CREATE_PREFERENCE_RATE_LIMIT`
+   - `CREATE_PREFERENCE_WINDOW_MS`
    - `WEB3FORMS_ACCESS_KEY`
 3. Save settings and trigger a redeploy.
 4. Validate health endpoint: `GET /api/health` (admin) and confirm `config_ok=true`.
@@ -17,9 +20,12 @@
 ## 2. Pre-Deploy Checklist
 1. `npm run check` passes locally.
 2. DB migrations in `migrations/` are reviewed and idempotent.
+   - Include `20260222_001_checkout_quotes.sql`
+   - Include `20260222_002_checkout_quotes_release.sql`
 3. Checkout flow smoke-tested:
    - `POST /api/checkout-quote`
    - `POST /api/create-preference` with returned `quote_id`
+   - Validate stock reservation: quote creation decreases stock and failed preference restores stock.
 4. Admin guard tested:
    - `/api/products?admin=1` without admin principal returns `403`.
 5. Contact form tested through `/api/contact`.

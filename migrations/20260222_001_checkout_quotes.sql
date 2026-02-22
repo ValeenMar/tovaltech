@@ -16,6 +16,8 @@ BEGIN
     total_ars INT NOT NULL,
     expires_at DATETIME2 NOT NULL,
     used_at DATETIME2 NULL,
+    released_at DATETIME2 NULL,
+    released_reason NVARCHAR(40) NULL,
     mp_preference_id NVARCHAR(80) NULL,
     request_fingerprint NVARCHAR(128) NULL,
     created_at DATETIME2 NOT NULL CONSTRAINT DF_tovaltech_checkout_quotes_created_at DEFAULT SYSUTCDATETIME()
@@ -44,5 +46,17 @@ IF NOT EXISTS (
 BEGIN
   CREATE INDEX IX_tovaltech_checkout_quotes_used_at
     ON dbo.tovaltech_checkout_quotes (used_at);
+END
+GO
+
+IF NOT EXISTS (
+  SELECT 1
+  FROM sys.indexes
+  WHERE name = 'IX_tovaltech_checkout_quotes_released_at'
+    AND object_id = OBJECT_ID(N'[dbo].[tovaltech_checkout_quotes]')
+)
+BEGIN
+  CREATE INDEX IX_tovaltech_checkout_quotes_released_at
+    ON dbo.tovaltech_checkout_quotes (released_at);
 END
 GO

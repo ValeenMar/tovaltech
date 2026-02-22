@@ -14,11 +14,13 @@
  */
 
 const connectDB = require('../db');
+const { sendJson } = require('../_shared/http');
+const { getTraceId, logWithTrace } = require('../_shared/trace');
 
 const VALID_STATUSES = ['pending', 'paid', 'shipped', 'delivered', 'cancelled'];
 
 module.exports = async function (context, req) {
-  const headers = { 'content-type': 'application/json' };
+  const traceId = getTraceId(req);
 
   try {
     const pool = await connectDB();
@@ -76,10 +78,11 @@ module.exports = async function (context, req) {
         items_json: undefined,  // no mandar el string crudo al frontend
       }));
 
-      context.res = {
-        status: 200, headers,
-        body: { orders, total, limit, offset },
-      };
+      sendJson(context, {
+        status: 200,
+        traceId,
+        body: { orders, total, limit, offset, trace_id: traceId },
+      });
       return;
     }
 
@@ -88,12 +91,24 @@ module.exports = async function (context, req) {
       const { id, status } = req.body ?? {};
 
       if (!id || !status) {
-        context.res = { status: 400, headers, body: { error: 'Faltan id o status' } };
+        sendJson(context, {
+          status: 400,
+          traceId,
+          body: { error: 'bad_request', message: 'Faltan id o status', trace_id: traceId },
+        });
         return;
       }
 
       if (!VALID_STATUSES.includes(status)) {
-        context.res = { status: 400, headers, body: { error: `Status inválido. Válidos: ${VALID_STATUSES.join(', ')}` } };
+        sendJson(context, {
+          status: 400,
+          traceId,
+          body: {
+            error: 'bad_request',
+            message: `Status inválido. Válidos: ${VALID_STATUSES.join(', ')}`,
+            trace_id: traceId,
+          },
+        });
         return;
       }
 
@@ -106,17 +121,26 @@ module.exports = async function (context, req) {
           WHERE id = @id
         `);
 
-      context.res = { status: 200, headers, body: { success: true, id, status } };
+      sendJson(context, {
+        status: 200,
+        traceId,
+        body: { success: true, id, status, trace_id: traceId },
+      });
       return;
     }
 
-    context.res = { status: 405, headers, body: { error: 'Method not allowed' } };
+    sendJson(context, {
+      status: 405,
+      traceId,
+      body: { error: 'method_not_allowed', trace_id: traceId },
+    });
 
   } catch (err) {
-    context.log.error('orders_error', err.message);
-    context.res = {
-      status: 500, headers,
-      body: { error: 'orders_failed', message: 'Error al procesar pedidos.' },
-    };
+    logWithTrace(context, 'error', traceId, 'orders_error', { error: err.message });
+    sendJson(context, {
+      status: 500,
+      traceId,
+      body: { error: 'orders_failed', message: 'Error al procesar pedidos.', trace_id: traceId },
+    });
   }
 };

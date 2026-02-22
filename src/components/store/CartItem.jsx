@@ -5,6 +5,8 @@ const fmtARS = (n) =>
 
 export default function CartItem({ item }) {
   const { updateQuantity, removeFromCart } = useCart();
+  const stock = Number.isFinite(Number(item.stock)) ? Math.max(0, Number(item.stock)) : null;
+  const atMaxStock = stock !== null && item.quantity >= stock;
 
   return (
     <div className="flex items-center gap-4 bg-white rounded-xl p-4 shadow-sm">
@@ -21,6 +23,11 @@ export default function CartItem({ item }) {
         <h3 className="font-semibold text-gray-800 truncate">{item.name}</h3>
         <p className="text-sm text-gray-500">{item.category}</p>
         <p className="text-blue-600 font-bold mt-1">{fmtARS(item.price)}</p>
+        {stock !== null && (
+          <p className={`text-[11px] mt-1 ${atMaxStock ? 'text-orange-500' : 'text-gray-400'}`}>
+            Stock disponible: {stock}
+          </p>
+        )}
       </div>
 
       {/* Cantidad */}
@@ -32,7 +39,12 @@ export default function CartItem({ item }) {
         <span className="w-8 text-center font-semibold">{item.quantity}</span>
         <button
           onClick={() => updateQuantity(item.id, item.quantity + 1)}
-          className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 flex items-center justify-center font-bold text-gray-600"
+          disabled={atMaxStock}
+          title={atMaxStock ? 'Stock máximo alcanzado' : 'Agregar una unidad'}
+          className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold
+            ${atMaxStock
+              ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}
         >+</button>
       </div>
 
