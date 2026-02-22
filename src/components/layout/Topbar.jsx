@@ -59,7 +59,7 @@ function NotificationPanel({ open, onClose, data, loading }) {
   return (
     <div
       ref={ref}
-      className="notif-panel-enter absolute right-0 top-12 w-[360px] max-w-[92vw] rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-xl shadow-2xl shadow-slate-900/15 z-50 overflow-hidden"
+      className="notif-panel-enter absolute right-0 top-12 w-[360px] max-w-[92vw] rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-xl shadow-2xl shadow-slate-900/15 z-[130] overflow-hidden"
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-cyan-50/60">
         <span className="text-sm font-semibold text-slate-800">Centro de actividad</span>
@@ -345,7 +345,7 @@ export default function Topbar() {
 
   return (
     <>
-      <header className="admin-surface mx-4 mt-4 sm:mx-6 lg:mx-8 rounded-2xl px-4 sm:px-5 py-3 flex items-center justify-between gap-3 shrink-0">
+      <header className="admin-surface relative z-20 mx-4 mt-4 sm:mx-6 lg:mx-8 rounded-2xl px-4 sm:px-5 py-3 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}

@@ -104,9 +104,9 @@ function MarkupModal({ product, globalMarkup, onClose }) {
   ]
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+    <div className="fixed inset-0 z-[120] bg-slate-950/30 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
          onClick={() => onClose(false)}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg"
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg my-8"
            onClick={e => e.stopPropagation()}>
 
         <div className="px-6 pt-5 pb-3 border-b border-gray-100">
@@ -246,9 +246,9 @@ function BulkMarkupModal({ category, globalMarkup, onClose }) {
   const effectivePct = value === '' ? (globalMarkup ?? 0) : (parseFloat(value) || 0)
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+    <div className="fixed inset-0 z-[120] bg-slate-950/30 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
          onClick={() => onClose(false)}>
-      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl my-8"
            onClick={e => e.stopPropagation()}>
         <h3 className="font-bold text-gray-800 mb-1">
           💹 Markup de categoría: <span className="text-blue-600">{category.name}</span>
@@ -339,9 +339,9 @@ function BulkSelectionModal({ selected, globalMarkup, onClose }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+    <div className="fixed inset-0 z-[120] bg-slate-950/30 backdrop-blur-sm flex items-start sm:items-center justify-center p-4 overflow-y-auto"
          onClick={() => onClose(false)}>
-      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl my-8"
            onClick={e => e.stopPropagation()}>
         <h3 className="font-bold text-gray-800 mb-1">
           💹 Markup masivo — <span className="text-blue-600">{selected.length} productos</span>
