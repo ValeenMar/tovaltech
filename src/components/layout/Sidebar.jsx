@@ -1,122 +1,137 @@
-import { useNavigate, useLocation } from 'react-router-dom'
-import { useApp } from '../../context/AppContext'
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useApp } from '../../context/AppContext';
 
 const navItems = [
-  { key: 'dashboard',  path: '/admin',            icon: '📊', label: 'Dashboard',      section: 'Principal' },
-  { key: 'orders',     path: '/admin/orders',      icon: '📦', label: 'Pedidos',        badge: 12, section: 'Principal' },
-  { key: 'products',   path: '/admin/products',    icon: '🏷️', label: 'Productos',      section: 'Principal' },
-  { key: 'categories', path: '/admin/categories',  icon: '🗂️', label: 'Categorías',     section: 'Principal' },
-  { key: 'banners',    path: '/admin/banners',      icon: '🖼️', label: 'Inicio',         section: 'Principal' },
-  { key: 'customers',  path: '/admin/customers',   icon: '👥', label: 'Clientes',       section: 'Principal' },
-  { key: 'invoices',   path: '/admin/invoices',    icon: '🧾', label: 'Facturas',       section: 'Sistema' },
-  { key: 'analytics',  path: '/admin/analytics',   icon: '📈', label: 'Analíticas',     section: 'Sistema' },
-  { key: 'settings',   path: '/admin/settings',    icon: '⚙️', label: 'Configuración',  section: 'Sistema' },
-]
+  { key: 'dashboard', path: '/admin', icon: '◉', label: 'Dashboard', section: 'Principal' },
+  { key: 'orders', path: '/admin/orders', icon: '◌', label: 'Pedidos', section: 'Principal' },
+  { key: 'products', path: '/admin/products', icon: '△', label: 'Productos', section: 'Principal' },
+  { key: 'categories', path: '/admin/categories', icon: '◇', label: 'Categorias', section: 'Principal' },
+  { key: 'banners', path: '/admin/banners', icon: '▣', label: 'Inicio', section: 'Principal' },
+  { key: 'customers', path: '/admin/customers', icon: '◍', label: 'Clientes', section: 'Sistema' },
+  { key: 'invoices', path: '/admin/invoices', icon: '▤', label: 'Facturas', section: 'Sistema' },
+  { key: 'analytics', path: '/admin/analytics', icon: '▴', label: 'Analiticas', section: 'Sistema' },
+  { key: 'settings', path: '/admin/settings', icon: '⚙', label: 'Configuracion', section: 'Sistema' },
+];
 
-// ── Logo TovalTech (mismo que usa la tienda en Navbar.jsx) ────────────────────
 function TovalTechLogo({ collapsed }) {
   return (
     <div className="flex items-center gap-3">
-      {/* Chip / circuit icon — idéntico al de la tienda */}
-      <div className="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center flex-shrink-0
-                      ring-1 ring-white/20 shadow-sm">
+      <div className="w-10 h-10 rounded-xl bg-white/10 ring-1 ring-white/20 flex items-center justify-center shadow-lg shadow-black/20 flex-shrink-0">
         <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="none"
              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="9" y="9" width="6" height="6" rx="1"/>
-          <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
-          <rect x="4" y="4" width="16" height="16" rx="2"/>
+          <rect x="9" y="9" width="6" height="6" rx="1" />
+          <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" />
+          <rect x="4" y="4" width="16" height="16" rx="2" />
         </svg>
       </div>
+
       {!collapsed && (
-        <span className="text-base font-bold tracking-tight leading-none">
-          Toval<span className="text-blue-300">Tech</span>
-          <span className="block text-[9px] font-normal text-white/40 tracking-widest uppercase mt-0.5">
-            Admin Panel
-          </span>
-        </span>
+        <div>
+          <p className="text-[17px] font-bold leading-none text-white tracking-tight">
+            Toval<span className="text-cyan-300">Tech</span>
+          </p>
+          <p className="text-[10px] tracking-[0.18em] uppercase text-white/45 mt-1">Admin Control</p>
+        </div>
       )}
     </div>
-  )
+  );
 }
 
 export default function Sidebar() {
-  const navigate  = useNavigate()
-  const location  = useLocation()
-  const { sidebarOpen, setSidebarOpen } = useApp()
-  const sections  = [...new Set(navItems.map(i => i.section))]
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { sidebarOpen, setSidebarOpen } = useApp();
+  const sections = [...new Set(navItems.map((item) => item.section))];
 
   const isActive = (item) => {
-    if (item.path === '/admin') return location.pathname === '/admin'
-    return location.pathname.startsWith(item.path)
-  }
+    if (item.path === '/admin') return location.pathname === '/admin';
+    return location.pathname.startsWith(item.path);
+  };
 
   const handleNav = (item) => {
-    navigate(item.path)
-    if (window.innerWidth < 1024) setSidebarOpen(false)
-  }
+    navigate(item.path);
+    if (window.innerWidth < 1024) setSidebarOpen(false);
+  };
 
   return (
     <>
-      {/* Overlay móvil */}
       {sidebarOpen && (
-        <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="fixed inset-0 bg-slate-950/45 backdrop-blur-[2px] z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
-      <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50
-        w-64 bg-gradient-to-b from-sidebar to-sidebar-light text-white
-        flex flex-col transition-transform duration-300
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-16'}
-      `}>
-        {/* Logo */}
-        <div className="px-4 py-5 flex items-center border-b border-white/10 shrink-0">
+      <aside
+        className={`
+          admin-sidebar fixed lg:static inset-y-0 left-0 z-50
+          w-[280px] lg:w-[272px] text-white
+          flex flex-col transition-transform duration-300
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 lg:w-[86px]'}
+        `}
+      >
+        <div className="px-4 pt-5 pb-4 border-b border-white/10 shrink-0">
           <TovalTechLogo collapsed={!sidebarOpen} />
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 py-3 overflow-y-auto">
-          {sections.map(section => (
-            <div key={section}>
-              <div className={`px-5 py-2 text-[10px] uppercase tracking-widest text-white/40
-                ${!sidebarOpen && 'lg:text-center lg:px-1 lg:text-[8px]'}`}>
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          {sections.map((section) => (
+            <div key={section} className="mb-4 last:mb-0">
+              <div
+                className={`px-2 mb-2 text-[10px] uppercase tracking-[0.2em] text-white/35
+                  ${!sidebarOpen ? 'lg:text-center lg:px-0' : ''}`}
+              >
                 {section}
               </div>
-              {navItems.filter(i => i.section === section).map(item => (
-                <div
-                  key={item.key}
-                  onClick={() => handleNav(item)}
-                  className={`sidebar-item ${isActive(item) ? 'active' : ''} ${!sidebarOpen ? 'lg:justify-center lg:px-0' : ''}`}
-                >
-                  <span className="text-lg min-w-[24px] text-center">{item.icon}</span>
-                  {sidebarOpen && <span>{item.label}</span>}
-                  {sidebarOpen && item.badge && (
-                    <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                      {item.badge}
+
+              <div className="space-y-1">
+                {navItems.filter((item) => item.section === section).map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => handleNav(item)}
+                    className={`sidebar-item w-full ${isActive(item) ? 'active' : ''} ${
+                      !sidebarOpen ? 'lg:justify-center lg:px-0' : ''
+                    }`}
+                  >
+                    <span className="w-6 h-6 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center text-[12px] font-bold">
+                      {item.icon}
                     </span>
-                  )}
-                </div>
-              ))}
+                    {sidebarOpen && <span className="truncate">{item.label}</span>}
+                  </button>
+                ))}
+              </div>
             </div>
           ))}
         </nav>
 
-        {/* ── Botón Ver Tienda ── */}
-        <div className="shrink-0 px-3 py-4 border-t border-white/10">
+        <div className="shrink-0 px-3 pb-3">
+          {sidebarOpen && (
+            <div className="rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 mb-3">
+              <p className="text-[11px] font-semibold text-white/90">Atajo rapido</p>
+              <p className="text-[11px] text-white/60 mt-0.5">
+                Abri navegador inteligente con <span className="admin-kbd">Ctrl</span> + <span className="admin-kbd">K</span>
+              </p>
+            </div>
+          )}
+
           <a
             href="/"
             target="_blank"
             rel="noopener noreferrer"
             title="Ver tienda"
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
-              text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200
-              ${!sidebarOpen ? 'lg:justify-center lg:px-0' : ''}`}
+            className={`flex items-center gap-3 rounded-xl border border-white/15 px-3 py-2.5 text-sm font-medium
+              text-white/75 hover:text-white hover:bg-white/10 transition-all duration-200 ${
+                !sidebarOpen ? 'lg:justify-center lg:px-0' : ''
+              }`}
           >
-            <span className="text-lg min-w-[24px] text-center">🛒</span>
+            <span className="w-6 h-6 rounded-lg bg-white/10 ring-1 ring-white/15 flex items-center justify-center text-[12px] font-bold">
+              ↗
+            </span>
             {sidebarOpen && <span className="flex-1">Ver tienda</span>}
-            {sidebarOpen && <span className="text-white/40 text-xs">↗</span>}
           </a>
         </div>
       </aside>
     </>
-  )
+  );
 }
