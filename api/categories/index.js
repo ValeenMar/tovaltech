@@ -12,6 +12,7 @@
  */
 
 const connectDB = require('../db');
+const { invalidateMarkupCache } = require('../_shared/markup');
 
 const headers = { 'content-type': 'application/json' };
 
@@ -446,6 +447,10 @@ module.exports = async function (context, req) {
         case 'bulk_markup':  result = await bulkMarkup(pool, body);    break;
         default:
           result = { status: 400, body: { error: `Acción desconocida: "${action}". Válidas: create, update, delete, assign.` } };
+      }
+
+      if (result.status < 300 && ['create', 'update', 'delete', 'bulk_markup'].includes(action)) {
+        invalidateMarkupCache();
       }
 
       context.res = { status: result.status, headers, body: result.body };

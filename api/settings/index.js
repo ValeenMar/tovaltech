@@ -1,4 +1,5 @@
 const connectDB = require('../db');
+const { invalidateMarkupCache } = require('../_shared/markup');
 
 module.exports = async function (context, req) {
   try {
@@ -47,6 +48,10 @@ module.exports = async function (context, req) {
             SET value = @value, updated_at = GETDATE()
             WHERE key_name = @key_name
           `);
+      }
+
+      if (Object.prototype.hasOwnProperty.call(body, 'global_markup_pct')) {
+        invalidateMarkupCache();
       }
 
       context.res = {

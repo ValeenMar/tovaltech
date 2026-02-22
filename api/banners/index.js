@@ -3,6 +3,7 @@
 // POST /api/banners          → { action: 'create'|'update'|'delete'|'set_youtube'|'set_dimensions' }
 
 const connectDB = require('../db');
+const { requireAdminIfRequested, requireAdmin } = require('../_shared/require-admin');
 const headers = { 'content-type': 'application/json' };
 
 // ── Cache en memoria para el GET público de la tienda ─────────────────────────
@@ -37,7 +38,12 @@ module.exports = async function (context, req) {
 
     // ── GET ──────────────────────────────────────────────────────────────────
     if (req.method === 'GET') {
-      const isAdmin = req.query.admin === '1';
+      const adminMode = requireAdminIfRequested(req);
+      if (adminMode.forbidden) {
+        context.res = { status: 403, headers, body: { error: 'forbidden' } };
+        return;
+      }
+      const isAdmin = adminMode.isAdmin;
 
       // Servir desde cache si es una petición de la tienda y el cache es válido
       if (!isAdmin) {
@@ -88,6 +94,12 @@ module.exports = async function (context, req) {
 
     // ── POST ─────────────────────────────────────────────────────────────────
     if (req.method === 'POST') {
+      const admin = requireAdmin(req);
+      if (!admin.isAdmin) {
+        context.res = { status: 403, headers, body: { error: 'forbidden' } };
+        return;
+      }
+
       const body   = req.body || {};
       const action = body.action;
       // Cualquier escritura invalida el cache

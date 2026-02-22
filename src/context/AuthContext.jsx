@@ -3,6 +3,7 @@
 // Coexiste con UserContext (que guarda datos de checkout en localStorage).
 
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { apiFetch } from '../lib/apiClient';
 
 const AuthContext = createContext(null);
 
@@ -12,8 +13,7 @@ export function AuthProvider({ children }) {
 
   // ── Al montar: verificar si hay sesión activa ─────────────────────────────
   useEffect(() => {
-    fetch('/api/auth-me', { credentials: 'include' })
-      .then(r => r.ok ? r.json() : null)
+    apiFetch('/api/auth-me', { credentials: 'include' })
       .then(data => {
         if (data?.ok) setAuthUser(data.user);
       })
@@ -23,15 +23,11 @@ export function AuthProvider({ children }) {
 
   // ── Login ─────────────────────────────────────────────────────────────────
   const login = useCallback(async (email, password) => {
-    const res  = await fetch('/api/auth-login', {
+    const data = await apiFetch('/api/auth-login', {
       method:      'POST',
       credentials: 'include',
-      headers:     { 'Content-Type': 'application/json' },
       body:        JSON.stringify({ email, password }),
     });
-    const data = await res.json();
-
-    if (!res.ok) throw data; // { error: 'credenciales_incorrectas' | 'email_sin_confirmar' }
 
     setAuthUser(data.user);
     return data.user;
@@ -39,7 +35,7 @@ export function AuthProvider({ children }) {
 
   // ── Logout ────────────────────────────────────────────────────────────────
   const logout = useCallback(async () => {
-    await fetch('/api/auth-logout', { method: 'POST', credentials: 'include' });
+    await apiFetch('/api/auth-logout', { method: 'POST', credentials: 'include' });
     setAuthUser(null);
   }, []);
 

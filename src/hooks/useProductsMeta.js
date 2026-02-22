@@ -2,6 +2,7 @@
 // Obtiene categorías (con árbol padre/hijo), subcategorías, marcas y proveedores.
 
 import { useState, useEffect } from 'react';
+import { apiFetch } from '../lib/apiClient';
 
 export function useProductsMeta() {
   const [categories,    setCategories]    = useState([]);
@@ -12,8 +13,7 @@ export function useProductsMeta() {
   const [loading,       setLoading]       = useState(true);
 
   useEffect(() => {
-    fetch('/api/products-meta')
-      .then(r => r.ok ? r.json() : Promise.reject())
+    apiFetch('/api/products-meta')
       .then(data => {
         if (data.categories?.length) {
           setCategories(['Todos', ...data.categories]);

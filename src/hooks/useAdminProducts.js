@@ -6,6 +6,7 @@
 //   - Devuelve markup_pct por producto y global_markup_pct
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { apiFetch, buildQuery } from '../lib/apiClient';
 
 export function useAdminProducts(filters = {}) {
   const [products,     setProducts]     = useState([]);
@@ -24,15 +25,15 @@ export function useAdminProducts(filters = {}) {
     setError(null);
 
     try {
-      const params = new URLSearchParams({ limit: 500, admin: '1' });
-      if (filters.buscar)    params.set('buscar',    filters.buscar);
-      if (filters.categoria) params.set('categoria', filters.categoria);
-      if (filters.proveedor) params.set('proveedor', filters.proveedor);
-      if (filters.marca)     params.set('marca',     filters.marca);
-
-      const res = await fetch(`/api/products?${params}`, { signal: controller.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const params = buildQuery({
+        limit: 500,
+        admin: '1',
+        buscar: filters.buscar,
+        categoria: filters.categoria,
+        proveedor: filters.proveedor,
+        marca: filters.marca,
+      });
+      const data = await apiFetch(`/api/products?${params}`, { signal: controller.signal });
 
       setProducts(data.items ?? []);
       setTotal(data.total ?? 0);

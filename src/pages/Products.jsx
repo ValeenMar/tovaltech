@@ -645,7 +645,7 @@ export default function Products() {
       setSearch(q)
       setDebouncedSearch(q)
     }
-  }, []) // solo al montar
+  }, [searchParams])
 
   // Si venimos de Categorías con un filtro pre-seleccionado
   useEffect(() => {

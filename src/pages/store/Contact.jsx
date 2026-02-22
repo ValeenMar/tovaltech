@@ -1,7 +1,5 @@
 import { useState } from 'react';
 
-const W3F_KEY = '1ddd9439-8caf-47e3-aaf2-93ce94285b9c';
-
 const INFO = [
   { icon: '📧', bg: 'bg-blue-100',   title: 'Email',     lines: ['valentin@toval-tech.com'] },
   { icon: '📞', bg: 'bg-green-100',  title: 'Teléfono',  lines: ['+54 11 2341-3674', 'Lun-Vie 9:00-18:00'] },
@@ -19,17 +17,19 @@ export default function Contact() {
     e.preventDefault();
     setStatus('sending');
     try {
-      const fd = new FormData();
-      fd.append('access_key', W3F_KEY);
-      fd.append('name',    form.name);
-      fd.append('email',   form.email);
-      fd.append('subject', form.subject);
-      fd.append('message', form.message);
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          subject: form.subject,
+          message: form.message,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
 
-      const res = await fetch('https://api.web3forms.com/submit', { method: 'POST', body: fd });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
+      if (res.ok && data.ok) {
         setStatus('success');
         setForm({ name: '', email: '', subject: '', message: '' });
         setTimeout(() => setStatus('idle'), 5000);

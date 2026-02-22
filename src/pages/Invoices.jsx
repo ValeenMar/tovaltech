@@ -1,9 +1,7 @@
-import { useApp } from '../context/AppContext'
 import StatusBadge from '../components/ui/StatusBadge'
+import { invoices } from '../data/mockData'
 
 export default function Invoices() {
-  const { invoices } = useApp()
-
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div className="px-5 py-4 flex justify-between items-center border-b border-gray-200">

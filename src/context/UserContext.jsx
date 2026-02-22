@@ -39,7 +39,9 @@ export function UserProvider({ children }) {
     const merged = { ...defaultUser, ...data };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-    } catch {}
+    } catch {
+      // Ignore storage quota/unavailable errors.
+    }
     setUser(merged);
   }, []);
 
@@ -47,7 +49,9 @@ export function UserProvider({ children }) {
   const clearUser = useCallback(() => {
     try {
       localStorage.removeItem(STORAGE_KEY);
-    } catch {}
+    } catch {
+      // Ignore storage quota/unavailable errors.
+    }
     setUser(null);
   }, []);
 

@@ -288,7 +288,6 @@ function MobileCatItem({ cat, hasChildren, childIsActive, isActive, activeCatego
 }
 
 const Pagination = memo(({ page, totalPages, onChange }) => {
-  if (totalPages <= 1) return null;
   const pages = useMemo(() => {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i);
     const arr = [0];
@@ -298,6 +297,8 @@ const Pagination = memo(({ page, totalPages, onChange }) => {
     arr.push(totalPages - 1);
     return arr;
   }, [page, totalPages]);
+
+  if (totalPages <= 1) return null;
 
   return (
     <div className="flex items-center justify-center gap-1.5 mt-10">

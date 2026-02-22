@@ -12,6 +12,7 @@
 
 const connectDB  = require('../db');
 const crypto     = require('crypto');
+const { getTraceId, logWithTrace } = require('../_shared/trace');
 
 const MP_PAYMENTS_URL = 'https://api.mercadopago.com/v1/payments';
 
@@ -58,13 +59,27 @@ function verifyMpSignature(req, dataId, secret) {
 }
 
 module.exports = async function (context, req) {
+  const traceId = getTraceId(req);
   const headers = { 'content-type': 'application/json' };
   const token   = process.env.MP_ACCESS_TOKEN;
-  const secret  = process.env.MP_WEBHOOK_SECRET; // puede ser undefined si no está configurado
+  const secret  = process.env.MP_WEBHOOK_SECRET;
 
   // ── MP envía un GET de validación al activar el webhook ──────────────────
   if (req.method === 'GET') {
     context.res = { status: 200, headers, body: { ok: true } };
+    return;
+  }
+
+  if (!token) {
+    logWithTrace(context, 'error', traceId, 'mp_webhook_missing_token');
+    context.res = { status: 500, headers, body: { error: 'config_missing' } };
+    return;
+  }
+
+  if (!secret) {
+    // Fail-closed: si falta el secret, NO se procesa el webhook.
+    logWithTrace(context, 'error', traceId, 'mp_webhook_missing_secret');
+    context.res = { status: 500, headers, body: { error: 'config_missing' } };
     return;
   }
 
@@ -81,23 +96,12 @@ module.exports = async function (context, req) {
     return;
   }
 
-  // ── Verificar firma si el secret está configurado ────────────────────────
-  // Si MP_WEBHOOK_SECRET no está en las env vars, se loguea un warning pero
-  // se sigue procesando (retrocompatibilidad con deployments sin el secret).
-  // Una vez que configures el secret en Azure, la validación se activa sola.
-  if (secret) {
-    const valid = verifyMpSignature(req, dataId, secret);
-    if (!valid) {
-      context.log.warn('mp_webhook_invalid_signature', { dataId });
-      // Respondemos 200 para que MP no reintente — si la firma no matchea
-      // es un request falso o un replay; no queremos procesarlo.
-      context.res = { status: 200, headers, body: { error: 'invalid_signature' } };
-      return;
-    }
-  } else {
-    context.log.warn('mp_webhook_no_secret', {
-      message: 'MP_WEBHOOK_SECRET no está configurado. Configuralo en Azure para habilitar la verificación de firma.',
-    });
+  // ── Verificar firma (siempre) ─────────────────────────────────────────────
+  const valid = verifyMpSignature(req, dataId, secret);
+  if (!valid) {
+    logWithTrace(context, 'warn', traceId, 'mp_webhook_invalid_signature', { dataId });
+    context.res = { status: 200, headers, body: { error: 'invalid_signature' } };
+    return;
   }
 
   try {

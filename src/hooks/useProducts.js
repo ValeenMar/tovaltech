@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { apiFetch, buildQuery } from '../lib/apiClient';
 
 /**
  * useProducts — obtiene productos para la tienda.
@@ -30,19 +31,16 @@ export function useProducts(filters = {}) {
     setLoading(true);
     setError(null);
 
-    const params = new URLSearchParams();
-    if (filters.categoria)    params.append('categoria', filters.categoria);
-    if (filters.hijos)        params.append('hijos',     filters.hijos);
-    if (filters.subcategoria) params.append('subcategoria', filters.subcategoria);
-    if (filters.buscar)       params.append('buscar',    filters.buscar);
-    if (filters.limit)        params.append('limit',     filters.limit);
-    if (filters.offset)       params.append('offset',    filters.offset);
+    const query = buildQuery({
+      categoria: filters.categoria,
+      hijos: filters.hijos,
+      subcategoria: filters.subcategoria,
+      buscar: filters.buscar,
+      limit: filters.limit,
+      offset: filters.offset,
+    });
 
-    fetch(`/api/products?${params}`, { signal: controller.signal })
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
+    apiFetch(`/api/products?${query}`, { signal: controller.signal })
       .then(data => {
         // La API devuelve { items: [...], total, limit, offset }
         const items = Array.isArray(data) ? data : (data.items ?? []);
@@ -52,7 +50,7 @@ export function useProducts(filters = {}) {
         setFromApi(true);
         setLoading(false);
       })
-      .catch(err => {
+      .catch((err) => {
         if (err.name === 'AbortError') return;
 
         // Fallback silencioso al context

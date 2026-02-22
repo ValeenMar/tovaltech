@@ -2,7 +2,6 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Sidebar from '../components/layout/Sidebar';
 import Topbar from '../components/layout/Topbar';
-import Modal from '../components/ui/Modal';
 
 export default function AdminLayout() {
   const [status, setStatus] = useState('checking'); // checking | ok | unauthorized
@@ -42,7 +41,6 @@ export default function AdminLayout() {
           <Outlet />
         </main>
       </div>
-      <Modal />
     </div>
   );
 }

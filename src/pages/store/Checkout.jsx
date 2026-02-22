@@ -47,6 +47,7 @@ export default function Checkout() {
   const [mpError,    setMpError]    = useState(null);
   const [savePrompt, setSavePrompt] = useState(false); // mostrar "¿guardar datos?"
   const [dataSaved,  setDataSaved]  = useState(false);
+  const [pendingInitPoint, setPendingInitPoint] = useState('');
 
   // Pre-llenar con datos guardados
   useEffect(() => {
@@ -94,43 +95,60 @@ export default function Checkout() {
     setMpLoading(true);
     setMpError(null);
     try {
-      const res = await fetch('/api/create-preference', {
+      const quoteRes = await fetch('/api/checkout-quote', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          buyer: form,
           items: cartItems.map(i => ({
-            id: String(i.id), title: i.name,
-            quantity: i.quantity, unit_price: i.price, currency_id: 'ARS',
+            id: String(i.id),
+            quantity: i.quantity,
           })),
-          shipping: shipping.canShip ? { cost: shipping.cost, zone: form.zone } : null,
+          shipping: { zone: form.zone },
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const { init_point } = await res.json();
+      if (!quoteRes.ok) {
+        const quoteErr = await quoteRes.json().catch(() => ({}));
+        throw new Error(quoteErr.error || `HTTP ${quoteRes.status}`);
+      }
+      const quoteData = await quoteRes.json();
+
+      const prefRes = await fetch('/api/create-preference', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          quote_id: quoteData.quote_id,
+          buyer: form,
+        }),
+      });
+      if (!prefRes.ok) throw new Error(`HTTP ${prefRes.status}`);
+      const { init_point } = await prefRes.json();
+      setPendingInitPoint(init_point);
 
       // Antes de redirigir, preguntar si guardar datos
       if (!hasSavedData || formChanged) setSavePrompt(true);
       else window.location.href = init_point;
-
-      // Guardar el init_point para usarlo después si el usuario acepta
-      window._mp_init_point = init_point;
-    } catch {
-      setMpError('No se pudo conectar con Mercado Pago. Probá con WhatsApp.');
+    } catch (err) {
+      if (String(err.message).includes('cannot_ship')) {
+        setMpError('Este pedido requiere cotizacion especial de envio. Escribinos por WhatsApp.');
+      } else {
+        setMpError('No se pudo conectar con Mercado Pago. Proba con WhatsApp.');
+      }
       setMpLoading(false);
+      return;
     }
+    setMpLoading(false);
   };
 
   const handleSaveAndPay = () => {
     saveUser(form);
     setDataSaved(true);
     setSavePrompt(false);
-    window.location.href = window._mp_init_point;
+    if (pendingInitPoint) window.location.href = pendingInitPoint;
   };
 
   const handleSkipAndPay = () => {
     setSavePrompt(false);
-    window.location.href = window._mp_init_point;
+    if (pendingInitPoint) window.location.href = pendingInitPoint;
   };
 
   const handleWhatsApp = () => {

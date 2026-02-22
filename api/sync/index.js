@@ -517,7 +517,9 @@ module.exports = async function (context, req) {
           SET value = @value, updated_at = GETDATE()
           WHERE key_name = 'last_sync_result'
         `);
-    } catch (_) {}
+    } catch (_) {
+      // Best-effort logging of sync failure result.
+    }
 
     context.res = {
       status: 500, headers,

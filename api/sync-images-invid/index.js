@@ -36,7 +36,7 @@ function toInvidSlug(name) {
   s = s.replace(/[óòôö]/g, 'o');
   s = s.replace(/[úùûü]/g, 'u');
   s = s.replace(/[ñ]/g, 'n');
-  s = s.replace(/[/\\()\[\]°ª°]/g, ' ');
+  s = s.replace(/[/\\()[\]°ª]/g, ' ');
   s = s.replace(/[^a-z0-9]+/g, '-');
   s = s.trim().replace(/^-+|-+$/g, '');
   return s;

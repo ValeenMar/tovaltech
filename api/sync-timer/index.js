@@ -13,22 +13,27 @@
 // Agregá CRON_SECRET en Azure → Configuration → Application settings.
 
 const syncHandler = require('../sync/index.js');
+const { getTraceId } = require('../_shared/trace');
 
 module.exports = async function (context, req) {
+  const traceId = getTraceId(req);
   // Verificar secret para que solo cron-job.org pueda dispararlo
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const provided = req.query?.secret || req.headers?.['x-cron-secret'];
-    if (provided !== secret) {
-      context.res = { status: 401, body: { error: 'unauthorized' } };
-      return;
-    }
+  if (!secret) {
+    context.res = { status: 500, body: { error: 'config_missing', trace_id: traceId } };
+    return;
   }
 
-  context.log.info('sync_timer_start — disparado por cron externo');
+  const provided = req.query?.secret || req.headers?.['x-cron-secret'];
+  if (provided !== secret) {
+    context.res = { status: 401, body: { error: 'unauthorized', trace_id: traceId } };
+    return;
+  }
+
+  context.log.info('sync_timer_start', { trace_id: traceId, source: 'external_cron' });
 
   const fakeReq = { body: {}, query: {}, method: 'POST', headers: {} };
   await syncHandler(context, fakeReq);
 
-  context.log.info('sync_timer_complete');
+  context.log.info('sync_timer_complete', { trace_id: traceId });
 };
