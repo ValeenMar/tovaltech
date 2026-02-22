@@ -279,39 +279,80 @@ async function assignProducts(pool, { product_ids, category_name }) {
 // Si reset_products_markup = true, también borra el markup_pct individual
 // de todos los productos (quedan heredando de su categoría).
 
-async function bulkMarkup(pool, { markup_pct, reset_products_markup }) {
+async function bulkMarkup(pool, { markup_pct, scope }) {
+  // scope:
+  //  'categories'       → actualiza markup en todas las categorías
+  //  'products_default' → productos con markup NULL → les pone el valor (solo los que heredaban global)
+  //  'products_all'     → todos los productos → les pone el valor (sobreescribe todo)
+  //  'products_reset'   → todos los productos → markup_pct = NULL (heredan de su categoría)
+
   const pct = parseFloat(markup_pct);
-  if (!Number.isFinite(pct) || pct < 0 || pct > 500) {
-    return { status: 400, body: { error: 'markup_pct debe ser un número entre 0 y 500.' } };
+
+  if (scope !== 'products_reset') {
+    if (!Number.isFinite(pct) || pct < 0 || pct > 500) {
+      return { status: 400, body: { error: 'markup_pct debe ser un número entre 0 y 500.' } };
+    }
   }
 
-  // Actualizar todas las categorías
-  const catResult = await pool.request()
-    .input('markup_pct', pct)
-    .query(`
-      UPDATE dbo.tovaltech_categories
-      SET markup_pct = @markup_pct, updated_at = GETDATE();
-      SELECT @@ROWCOUNT AS updated_cats;
-    `);
+  const validScopes = ['categories', 'products_default', 'products_all', 'products_reset'];
+  if (!validScopes.includes(scope)) {
+    return { status: 400, body: { error: 'scope inválido.' } };
+  }
 
-  const updatedCats = catResult.recordset?.[0]?.updated_cats ?? 0;
-
+  let updatedCats     = 0;
   let updatedProducts = 0;
-  if (reset_products_markup) {
-    const prodResult = await pool.request().query(`
-      UPDATE dbo.tovaltech_products
-      SET markup_pct = NULL, updated_at = GETDATE()
-      WHERE markup_pct IS NOT NULL;
-      SELECT @@ROWCOUNT AS updated_prods;
-    `);
-    updatedProducts = prodResult.recordset?.[0]?.updated_prods ?? 0;
+
+  if (scope === 'categories') {
+    const r = await pool.request()
+      .input('markup_pct', pct)
+      .query(`
+        UPDATE dbo.tovaltech_categories
+        SET markup_pct = @markup_pct, updated_at = GETDATE();
+        SELECT @@ROWCOUNT AS n;
+      `);
+    updatedCats = r.recordset?.[0]?.n ?? 0;
+  }
+
+  if (scope === 'products_default') {
+    const r = await pool.request()
+      .input('markup_pct', pct)
+      .query(`
+        UPDATE dbo.tovaltech_products
+        SET markup_pct = @markup_pct, updated_at = GETDATE()
+        WHERE markup_pct IS NULL;
+        SELECT @@ROWCOUNT AS n;
+      `);
+    updatedProducts = r.recordset?.[0]?.n ?? 0;
+  }
+
+  if (scope === 'products_all') {
+    const r = await pool.request()
+      .input('markup_pct', pct)
+      .query(`
+        UPDATE dbo.tovaltech_products
+        SET markup_pct = @markup_pct, updated_at = GETDATE();
+        SELECT @@ROWCOUNT AS n;
+      `);
+    updatedProducts = r.recordset?.[0]?.n ?? 0;
+  }
+
+  if (scope === 'products_reset') {
+    const r = await pool.request()
+      .query(`
+        UPDATE dbo.tovaltech_products
+        SET markup_pct = NULL, updated_at = GETDATE()
+        WHERE markup_pct IS NOT NULL;
+        SELECT @@ROWCOUNT AS n;
+      `);
+    updatedProducts = r.recordset?.[0]?.n ?? 0;
   }
 
   return {
     status: 200,
     body: {
       success:          true,
-      markup_pct:       pct,
+      scope,
+      markup_pct:       scope === 'products_reset' ? null : pct,
       updated_cats:     updatedCats,
       updated_products: updatedProducts,
     },

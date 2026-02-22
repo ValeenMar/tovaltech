@@ -635,12 +635,65 @@ function CategoryRow({ cat, allCategories, globalMarkup, pendingChanges, onPendi
 }
 
 // ── Panel: markup global de categorías ────────────────────────────────────────
+function Toggle({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full
+                  border-2 border-transparent transition-colors duration-200
+                  focus:outline-none focus:ring-2 focus:ring-violet-500
+                  ${checked ? 'bg-violet-500' : 'bg-gray-200'}`}>
+      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full
+                        bg-white shadow transition duration-200
+                        ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+    </button>
+  )
+}
+
+const SCOPES = [
+  {
+    id:    'categories',
+    label: 'Todas las categorías',
+    desc:  'Cambia el markup de todas las categorías al valor indicado.',
+    needsValue: true,
+    warn:  false,
+  },
+  {
+    id:    'products_default',
+    label: 'Productos sin markup propio (heredan global)',
+    desc:  'Asigna el valor a los productos que tienen markup NULL — los que actualmente heredan el global.',
+    needsValue: true,
+    warn:  false,
+  },
+  {
+    id:    'products_all',
+    label: 'Todos los productos (sobreescribir todo)',
+    desc:  'Asigna el valor a absolutamente todos los productos, tengan markup propio o no.',
+    needsValue: true,
+    warn:  true,
+  },
+  {
+    id:    'products_reset',
+    label: 'Resetear markup de todos los productos',
+    desc:  'Borra el markup individual de todos los productos para que hereden el de su categoría.',
+    needsValue: false,
+    warn:  true,
+  },
+]
+
 function BulkMarkupPanel({ onDone }) {
-  const [value,         setValue]         = useState('')
-  const [resetProducts, setResetProducts] = useState(false)
-  const [saving,        setSaving]        = useState(false)
-  const [result,        setResult]        = useState(null)  // { ok, data } | null
-  const [showConfirm,   setShowConfirm]   = useState(false)
+  const [scope,       setScope]       = useState('categories')
+  const [value,       setValue]       = useState('')
+  const [saving,      setSaving]      = useState(false)
+  const [result,      setResult]      = useState(null)
+  const [showConfirm, setShowConfirm] = useState(false)
+
+  const currentScope = SCOPES.find(s => s.id === scope)
+  const isValid = !currentScope.needsValue ||
+    (value !== '' && Number.isFinite(parseFloat(value)) && parseFloat(value) >= 0 && parseFloat(value) <= 500)
 
   const handleApply = async () => {
     setShowConfirm(false)
@@ -650,16 +703,15 @@ function BulkMarkupPanel({ onDone }) {
       const res  = await fetch('/api/categories', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          action:                 'bulk_markup',
-          markup_pct:             parseFloat(value),
-          reset_products_markup:  resetProducts,
+          action:     'bulk_markup',
+          markup_pct: currentScope.needsValue ? parseFloat(value) : null,
+          scope,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Error')
       setResult({ ok: true, data })
       setValue('')
-      setResetProducts(false)
       onDone()
     } catch (e) {
       setResult({ ok: false, error: e.message })
@@ -668,70 +720,53 @@ function BulkMarkupPanel({ onDone }) {
     }
   }
 
-  const isValid = value !== '' && Number.isFinite(parseFloat(value)) && parseFloat(value) >= 0 && parseFloat(value) <= 500
-
   return (
     <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl px-5 py-4 mb-5">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <p className="text-sm font-bold text-violet-800 flex items-center gap-2">
-            🎛️ Markup global de categorías
-          </p>
-          <p className="text-xs text-violet-600 mt-0.5">
-            Cambia el markup de <strong>todas</strong> las categorías de una vez.
-            Solo afecta categorías — los productos con markup propio no cambian (a menos que actives el reset).
-          </p>
-        </div>
-      </div>
+      <p className="text-sm font-bold text-violet-800 mb-1">🎛️ Markup global de categorías y productos</p>
+      <p className="text-xs text-violet-600 mb-4">
+        Modificá en masa el markup de categorías y/o productos sin tocarlos uno por uno.
+      </p>
 
-      <div className="flex flex-wrap items-end gap-3 mt-4">
-        {/* Input valor */}
-        <div>
-          <label className="block text-xs font-semibold text-violet-700 mb-1">Nuevo markup para todas</label>
-          <div className="flex items-center gap-1.5">
-            <input
-              type="number" min="0" max="500" step="0.5"
-              value={value}
-              onChange={e => { setValue(e.target.value); setResult(null) }}
-              placeholder="Ej: 40"
-              className="w-24 px-3 py-2 border border-violet-300 rounded-lg text-sm bg-white
-                         focus:outline-none focus:ring-2 focus:ring-violet-500"
-            />
-            <span className="text-violet-600 font-semibold text-sm">%</span>
-          </div>
-        </div>
-
-        {/* Toggle reset productos */}
-        <div className="flex-1 min-w-[260px]">
-          <label className="flex items-start gap-2.5 cursor-pointer group">
-            <div className="relative mt-0.5 flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={resetProducts}
-                onChange={e => setResetProducts(e.target.checked)}
-                className="sr-only"
-              />
-              <div
-                onClick={() => setResetProducts(v => !v)}
-                className={`w-10 h-5 rounded-full transition-colors cursor-pointer
-                  ${resetProducts ? 'bg-violet-500' : 'bg-gray-200'}`}>
-                <div className={`w-4 h-4 bg-white rounded-full shadow mt-0.5 transition-transform
-                  ${resetProducts ? 'translate-x-5' : 'translate-x-0.5'}`} />
-              </div>
-            </div>
+      {/* Selector de scope como radio buttons */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+        {SCOPES.map(s => (
+          <label key={s.id}
+            className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all
+              ${scope === s.id
+                ? 'border-violet-400 bg-violet-100'
+                : 'border-gray-200 bg-white hover:border-violet-200'}`}>
+            <input type="radio" name="bulk_scope" value={s.id} checked={scope === s.id}
+              onChange={() => { setScope(s.id); setResult(null) }}
+              className="mt-0.5 accent-violet-600 flex-shrink-0" />
             <div>
-              <p className="text-xs font-semibold text-gray-700">
-                Resetear markup individual de productos
+              <p className={`text-xs font-semibold ${scope === s.id ? 'text-violet-800' : 'text-gray-700'}`}>
+                {s.warn && '⚠️ '}{s.label}
               </p>
-              <p className="text-[11px] text-gray-500 mt-0.5">
-                Borra el markup propio de <strong>todos los productos</strong> para que hereden el de su categoría.
-                {resetProducts && <span className="text-orange-600 font-medium"> ⚠️ Esta acción afecta a toda la base.</span>}
-              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5">{s.desc}</p>
             </div>
           </label>
-        </div>
+        ))}
+      </div>
 
-        {/* Botón */}
+      {/* Input valor + botón */}
+      <div className="flex flex-wrap items-end gap-3">
+        {currentScope.needsValue && (
+          <div>
+            <label className="block text-xs font-semibold text-violet-700 mb-1">Markup a aplicar</label>
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number" min="0" max="500" step="0.5"
+                value={value}
+                onChange={e => { setValue(e.target.value); setResult(null) }}
+                placeholder="Ej: 40"
+                className="w-24 px-3 py-2 border border-violet-300 rounded-lg text-sm bg-white
+                           focus:outline-none focus:ring-2 focus:ring-violet-500"
+              />
+              <span className="text-violet-600 font-semibold text-sm">%</span>
+            </div>
+          </div>
+        )}
+
         <button
           onClick={() => setShowConfirm(true)}
           disabled={!isValid || saving}
@@ -739,15 +774,17 @@ function BulkMarkupPanel({ onDone }) {
                      hover:bg-violet-700 disabled:opacity-40 transition-colors flex items-center gap-2">
           {saving
             ? <><span className="animate-spin inline-block">⚙️</span> Aplicando...</>
-            : '🎛️ Aplicar a todas'}
+            : '🎛️ Aplicar'}
         </button>
       </div>
 
       {/* Resultado */}
       {result?.ok && (
         <div className="mt-3 text-xs bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded-lg">
-          ✅ {result.data.updated_cats} categorías actualizadas a <strong>{result.data.markup_pct}%</strong>.
-          {result.data.updated_products > 0 && ` Markup reseteado en ${result.data.updated_products} productos.`}
+          {result.data.scope === 'categories' && `✅ ${result.data.updated_cats} categorías actualizadas a ${result.data.markup_pct}%.`}
+          {result.data.scope === 'products_default' && `✅ ${result.data.updated_products} productos sin markup propio actualizados a ${result.data.markup_pct}%.`}
+          {result.data.scope === 'products_all' && `✅ ${result.data.updated_products} productos actualizados a ${result.data.markup_pct}%.`}
+          {result.data.scope === 'products_reset' && `✅ Markup individual reseteado en ${result.data.updated_products} productos. Ahora heredan de su categoría.`}
         </div>
       )}
       {result?.ok === false && (
@@ -762,17 +799,16 @@ function BulkMarkupPanel({ onDone }) {
              onClick={() => setShowConfirm(false)}>
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl"
                onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-gray-800 mb-2 text-base">🎛️ Confirmar cambio masivo</h3>
-            <p className="text-sm text-gray-600 mb-2">
-              Vas a setear <strong>{value}%</strong> de markup en <strong>todas</strong> las categorías.
+            <h3 className="font-bold text-gray-800 mb-3 text-base">🎛️ Confirmar cambio masivo</h3>
+            <div className="bg-violet-50 border border-violet-200 rounded-lg px-3 py-2.5 text-xs text-violet-700 mb-3">
+              <strong>{currentScope.label}</strong>
+              {currentScope.needsValue && <> → <strong>{value}%</strong></>}
+            </div>
+            <p className="text-xs text-gray-500 mb-5">
+              {currentScope.warn
+                ? '⚠️ Esta operación afecta a muchos registros y no se puede deshacer desde la app.'
+                : 'Esta operación no se puede deshacer desde la app.'}
             </p>
-            {resetProducts && (
-              <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-xs text-orange-700 mb-3">
-                ⚠️ <strong>Además</strong> se va a borrar el markup individual de todos los productos.
-                Quedarán heredando el markup de su categoría.
-              </div>
-            )}
-            <p className="text-xs text-gray-400 mb-5">Esta operación no se puede deshacer desde la app.</p>
             <div className="flex gap-3">
               <button onClick={() => setShowConfirm(false)}
                 className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50">
@@ -789,7 +825,6 @@ function BulkMarkupPanel({ onDone }) {
     </div>
   )
 }
-
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function Categories() {
   const { categories, loading, error, reload } = useCategories()
