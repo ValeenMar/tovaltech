@@ -10,6 +10,26 @@
   },
   "routes": [
     {
+      "route": "/api/auth-register",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/api/auth-login",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/api/auth-confirm",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/api/auth-logout",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/api/auth-me",
+      "allowedRoles": ["anonymous"]
+    },
+    {
       "route": "/admin",
       "allowedRoles": ["admin"]
     },

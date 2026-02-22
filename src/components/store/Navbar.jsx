@@ -88,11 +88,16 @@ export default function Navbar() {
                 </button>
               </div>
             ) : (
-              <Link to="/ingresar"
-                className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors px-3 py-2 rounded-lg">
-                <UserIcon className="w-4 h-4" />
-                Ingresar
-              </Link>
+              <div className="hidden sm:flex items-center gap-2">
+                <Link to="/ingresar"
+                  className="text-xs font-medium text-gray-500 hover:text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+                  Ingresar
+                </Link>
+                <Link to="/registrarse"
+                  className="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg transition-colors">
+                  Crear cuenta
+                </Link>
+              </div>
             )}
 
             {/* Carrito */}
@@ -128,10 +133,10 @@ export default function Navbar() {
             <button onClick={logout} className="text-sm text-gray-400">Salir</button>
           </>
         ) : (
-          <Link to="/ingresar" className="text-sm text-gray-400 ml-auto flex items-center gap-1">
-            <UserIcon className="w-3.5 h-3.5" />
-            Ingresar
-          </Link>
+          <div className="ml-auto flex items-center gap-3">
+            <Link to="/ingresar" className="text-sm text-gray-500">Ingresar</Link>
+            <Link to="/registrarse" className="text-sm font-semibold text-blue-600">Registrarse</Link>
+          </div>
         )}
       </div>
     </nav>
