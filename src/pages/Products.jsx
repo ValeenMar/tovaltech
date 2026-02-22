@@ -12,6 +12,27 @@ const fmtUSD = (n) => n != null
 const fmtARS = (n) => n != null
   ? new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n) : '—'
 
+async function readApiError(res, fallback) {
+  const contentType = res.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    try {
+      const data = await res.json()
+      return data?.error || data?.message || fallback
+    } catch {
+      return fallback
+    }
+  }
+  try {
+    const text = await res.text()
+    if (text && /<html|<!doctype/i.test(text)) {
+      return 'Sesion admin invalida. Reingresa al panel.'
+    }
+  } catch {
+    // ignore
+  }
+  return fallback
+}
+
 // ── Hook: carga categorías ────────────────────────────────────────────────────
 function useCategories() {
   const [categories, setCategories] = useState([])
@@ -62,13 +83,17 @@ function MarkupModal({ product, globalMarkup, onClose }) {
       const res = await fetch(`/api/products/${product.id}/markup`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(payload),
       })
-      if (!res.ok) throw new Error()
+      const contentType = res.headers.get('content-type') || ''
+      if (!res.ok || !contentType.includes('application/json')) {
+        throw new Error(await readApiError(res, 'Error al guardar'))
+      }
       setSaved(true)
       setTimeout(() => onClose(true), 900)
-    } catch {
-      setError('Error al guardar')
+    } catch (e) {
+      setError(e?.message || 'Error al guardar')
       setSaving(false)
     }
   }
@@ -292,18 +317,23 @@ function BulkSelectionModal({ selected, globalMarkup, onClose }) {
     try {
       // Aplica el markup a cada producto seleccionado en paralelo
       await Promise.all(
-        selected.map(id =>
-          fetch(`/api/products/${id}/markup`, {
+        selected.map(async (id) => {
+          const res = await fetch(`/api/products/${id}/markup`, {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({ markup_pct: markup }),
           })
-        )
+          const contentType = res.headers.get('content-type') || ''
+          if (!res.ok || !contentType.includes('application/json')) {
+            throw new Error(await readApiError(res, `Error al guardar producto ${id}`))
+          }
+        })
       )
       setSaved(true)
       setTimeout(() => onClose(true), 1200)
-    } catch {
-      setError('Error al guardar uno o más productos')
+    } catch (e) {
+      setError(e?.message || 'Error al guardar uno o más productos')
       setSaving(false)
     }
   }
@@ -365,9 +395,11 @@ function VisibilityToggle({ product, onToggled }) {
       const res = await fetch(`/api/products/${product.id}/markup`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ active: !isActive }),
       })
-      if (!res.ok) throw new Error()
+      const contentType = res.headers.get('content-type') || ''
+      if (!res.ok || !contentType.includes('application/json')) throw new Error()
       onToggled()
     } catch {
       // silencio
@@ -404,9 +436,11 @@ function FeaturedToggle({ product, onToggled }) {
       const res = await fetch(`/api/products/${product.id}/markup`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ featured: !isFeatured }),
       })
-      if (!res.ok) throw new Error()
+      const contentType = res.headers.get('content-type') || ''
+      if (!res.ok || !contentType.includes('application/json')) throw new Error()
       onToggled()
     } catch {
       // silencio

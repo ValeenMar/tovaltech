@@ -100,15 +100,6 @@
       ]
     },
     {
-      "route": "/api/products/*",
-      "methods": [
-        "POST"
-      ],
-      "allowedRoles": [
-        "admin"
-      ]
-    },
-    {
       "route": "/api/account-profile*",
       "allowedRoles": [
         "anonymous"
