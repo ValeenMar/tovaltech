@@ -100,7 +100,10 @@
       ]
     },
     {
-      "route": "/api/products/*/markup",
+      "route": "/api/products/*",
+      "methods": [
+        "POST"
+      ],
       "allowedRoles": [
         "admin"
       ]
