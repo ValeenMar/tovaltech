@@ -82,6 +82,12 @@
       ]
     },
     {
+      "route": "/api/sync-images-invid*",
+      "allowedRoles": [
+        "admin"
+      ]
+    },
+    {
       "route": "/api/sync*",
       "allowedRoles": [
         "admin"
@@ -101,12 +107,6 @@
     },
     {
       "route": "/api/analytics*",
-      "allowedRoles": [
-        "admin"
-      ]
-    },
-    {
-      "route": "/api/sync-images-invid*",
       "allowedRoles": [
         "admin"
       ]
