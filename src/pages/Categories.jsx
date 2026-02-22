@@ -43,6 +43,17 @@ function buildTree(categories) {
   }))
 }
 
+function useEscapeClose(onClose, enabled = true) {
+  useEffect(() => {
+    if (!enabled) return undefined
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [enabled, onClose])
+}
+
 // ── Barra sticky de cambios pendientes ─────────────────────────────────────
 function PendingBar({ pendingCount, onApply, onCancel, saving }) {
   if (pendingCount === 0) return null
@@ -166,6 +177,8 @@ function InlineMarkupEditor({ cat, globalMarkup, pendingValue, onPendingChange }
 
 // ── Modal crear categoría ──────────────────────────────────────────────────
 function CreateModal({ allCategories, onClose, onCreated }) {
+  useEscapeClose(onClose)
+
   const [name,     setName]     = useState('')
   const [markup,   setMarkup]   = useState('')
   const [parentId, setParentId] = useState('')
@@ -254,6 +267,8 @@ function CreateModal({ allCategories, onClose, onCreated }) {
 
 // ── Modal: editar nombre/padre ─────────────────────────────────────────────
 function EditModal({ category, allCategories, onClose, onSaved }) {
+  useEscapeClose(onClose)
+
   const [name,     setName]     = useState(category.name)
   const [parentId, setParentId] = useState(category.parent_id ? String(category.parent_id) : '')
   const [saving,   setSaving]   = useState(false)
@@ -319,6 +334,8 @@ function EditModal({ category, allCategories, onClose, onSaved }) {
 
 // ── Modal: eliminar categoría ──────────────────────────────────────────────
 function DeleteModal({ category, allCategories, onClose, onDeleted }) {
+  useEscapeClose(onClose)
+
   const [reassignTo, setReassignTo] = useState('')
   const [saving,     setSaving]     = useState(false)
   const [error,      setError]      = useState(null)
@@ -374,6 +391,8 @@ function DeleteModal({ category, allCategories, onClose, onDeleted }) {
 
 // ── Modal: asignar productos ────────────────────────────────────────────────
 function AssignModal({ category, allCategories, onClose }) {
+  useEscapeClose(onClose)
+
   const [search,   setSearch]   = useState('')
   const [products, setProducts] = useState([])
   const [total,    setTotal]    = useState(0)
@@ -726,6 +745,8 @@ function BulkMarkupPanel({ onDone }) {
       setSaving(false)
     }
   }
+
+  useEscapeClose(() => setShowConfirm(false), showConfirm)
 
   return (
     <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-xl px-5 py-4 mb-5">

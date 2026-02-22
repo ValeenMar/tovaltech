@@ -30,8 +30,20 @@ function ModalPortal({ children }) {
   return createPortal(children, document.body)
 }
 
+function useEscapeClose(onClose) {
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+}
+
 // ── Modal detalle de pedido ────────────────────────────────────────────────────
 function OrderModal({ order, onClose, onStatusChange }) {
+  useEscapeClose(onClose)
+
   const [status,  setStatus]  = useState(order.status)
   const [saving,  setSaving]  = useState(false)
   const [error,   setError]   = useState(null)

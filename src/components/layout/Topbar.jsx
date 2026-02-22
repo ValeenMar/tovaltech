@@ -287,6 +287,16 @@ export default function Topbar() {
   }, [themeMenuOpen]);
 
   useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key !== 'Escape') return;
+      setThemeMenuOpen(false);
+      setPanelOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -424,8 +434,8 @@ export default function Topbar() {
             <span className={`absolute bottom-0.5 right-0.5 w-2 h-2 rounded-full ring-2 ring-white ${currentTheme.dot}`} />
 
             {themeMenuOpen && (
-              <div className="absolute right-0 top-11 z-[140] w-44 rounded-xl border border-slate-200 bg-white/95 backdrop-blur-xl shadow-2xl shadow-slate-900/15 p-1.5">
-                <p className="px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-slate-400 font-semibold">Paleta</p>
+              <div className="absolute right-0 top-11 z-[140] w-44 rounded-xl border border-slate-600 bg-slate-900/95 backdrop-blur-xl shadow-2xl shadow-black/45 p-1.5">
+                <p className="px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-slate-300 font-semibold">Paleta</p>
                 {themeOptions.map((option) => (
                   <button
                     key={option.value}
@@ -433,8 +443,8 @@ export default function Topbar() {
                     onClick={() => { setAdminTheme(option.value); setThemeMenuOpen(false); }}
                     className={`w-full mt-1 rounded-lg px-2.5 py-2 text-xs font-semibold border flex items-center gap-2 transition-colors ${
                       adminTheme === option.value
-                        ? 'border-slate-300 bg-slate-100 text-slate-700'
-                        : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                        ? 'border-slate-500 bg-slate-700/75 text-slate-100'
+                        : 'border-transparent text-slate-300 hover:bg-slate-800/85 hover:text-slate-100'
                     }`}
                   >
                     <span className={`w-2.5 h-2.5 rounded-full ${option.dot}`} />

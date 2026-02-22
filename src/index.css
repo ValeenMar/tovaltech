@@ -240,6 +240,38 @@
   color: rgba(232, 225, 255, 0.56);
 }
 
+.admin-shell.admin-theme-violet .bg-white,
+.admin-shell.admin-theme-violet .bg-gray-50,
+.admin-shell.admin-theme-violet .bg-gray-100 {
+  background: rgba(31, 32, 56, 0.82) !important;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 14px 28px rgba(8, 7, 20, 0.45);
+}
+
+.admin-shell.admin-theme-violet .border-gray-200,
+.admin-shell.admin-theme-violet .border-gray-100 {
+  border-color: rgba(171, 157, 235, 0.24) !important;
+}
+
+.admin-shell.admin-theme-violet .text-gray-900,
+.admin-shell.admin-theme-violet .text-gray-800 {
+  color: #f8f7ff !important;
+}
+
+.admin-shell.admin-theme-violet .text-gray-700 {
+  color: #e6e3f7 !important;
+}
+
+.admin-shell.admin-theme-violet .text-gray-600,
+.admin-shell.admin-theme-violet .text-gray-500 {
+  color: #cbc5ea !important;
+}
+
+.admin-shell.admin-theme-violet .text-gray-400,
+.admin-shell.admin-theme-violet .text-gray-300 {
+  color: #a79ecf !important;
+}
+
 .admin-shell.admin-theme-violet .sidebar-item.active {
   background: linear-gradient(120deg, rgba(139, 92, 246, 0.33), rgba(124, 58, 237, 0.2));
   box-shadow: 0 0 18px rgba(139, 92, 246, 0.32);
@@ -304,6 +336,38 @@
 
 .admin-shell.admin-theme-green .admin-surface input::placeholder {
   color: rgba(216, 255, 240, 0.56);
+}
+
+.admin-shell.admin-theme-green .bg-white,
+.admin-shell.admin-theme-green .bg-gray-50,
+.admin-shell.admin-theme-green .bg-gray-100 {
+  background: rgba(18, 42, 37, 0.84) !important;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 14px 28px rgba(4, 14, 12, 0.44);
+}
+
+.admin-shell.admin-theme-green .border-gray-200,
+.admin-shell.admin-theme-green .border-gray-100 {
+  border-color: rgba(126, 231, 211, 0.24) !important;
+}
+
+.admin-shell.admin-theme-green .text-gray-900,
+.admin-shell.admin-theme-green .text-gray-800 {
+  color: #f2fff9 !important;
+}
+
+.admin-shell.admin-theme-green .text-gray-700 {
+  color: #d9f8ee !important;
+}
+
+.admin-shell.admin-theme-green .text-gray-600,
+.admin-shell.admin-theme-green .text-gray-500 {
+  color: #b7e9d8 !important;
+}
+
+.admin-shell.admin-theme-green .text-gray-400,
+.admin-shell.admin-theme-green .text-gray-300 {
+  color: #89cbb5 !important;
 }
 
 .admin-shell.admin-theme-green .sidebar-item.active {
@@ -373,6 +437,38 @@
 
 .admin-shell.admin-theme-red .admin-surface input::placeholder {
   color: rgba(255, 223, 231, 0.58);
+}
+
+.admin-shell.admin-theme-red .bg-white,
+.admin-shell.admin-theme-red .bg-gray-50,
+.admin-shell.admin-theme-red .bg-gray-100 {
+  background: rgba(48, 18, 29, 0.84) !important;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 14px 28px rgba(18, 6, 12, 0.45);
+}
+
+.admin-shell.admin-theme-red .border-gray-200,
+.admin-shell.admin-theme-red .border-gray-100 {
+  border-color: rgba(255, 154, 180, 0.24) !important;
+}
+
+.admin-shell.admin-theme-red .text-gray-900,
+.admin-shell.admin-theme-red .text-gray-800 {
+  color: #fff4f7 !important;
+}
+
+.admin-shell.admin-theme-red .text-gray-700 {
+  color: #ffe4eb !important;
+}
+
+.admin-shell.admin-theme-red .text-gray-600,
+.admin-shell.admin-theme-red .text-gray-500 {
+  color: #f1c8d4 !important;
+}
+
+.admin-shell.admin-theme-red .text-gray-400,
+.admin-shell.admin-theme-red .text-gray-300 {
+  color: #d39eaf !important;
 }
 
 .admin-shell.admin-theme-red .sidebar-item.active {

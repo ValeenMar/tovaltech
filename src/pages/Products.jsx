@@ -39,6 +39,16 @@ function AdminModalPortal({ children }) {
   return createPortal(children, document.body)
 }
 
+function useEscapeClose(onClose) {
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -216,6 +226,8 @@ function useCategories() {
 
 // ── Modal: editor de producto (markup + nombre + descripción) ─────────────────
 function MarkupModal({ product, globalMarkup, onClose }) {
+  useEscapeClose(() => onClose(false))
+
   const [tab,         setTab]         = useState('precio')
   const [value,       setValue]       = useState(product.markup_pct != null ? String(product.markup_pct) : '')
   const [name,        setName]        = useState(product.name || '')
@@ -387,6 +399,8 @@ function MarkupModal({ product, globalMarkup, onClose }) {
 
 // ── Modal: markup masivo por categoría ────────────────────────────────────────
 function BulkMarkupModal({ category, globalMarkup, onClose }) {
+  useEscapeClose(() => onClose(false))
+
   const [value,  setValue]  = useState(category.markup_pct != null ? String(category.markup_pct) : '')
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
