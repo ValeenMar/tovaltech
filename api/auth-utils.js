@@ -1,7 +1,7 @@
 // api/auth-utils.js
 // Utilidades compartidas para el sistema de auth de compradores
 
-const jwt  = require('jsonwebtoken');
+const jwt    = require('jsonwebtoken');
 const crypto = require('crypto');
 
 const COOKIE_NAME = 'tovaltech_auth';
@@ -23,26 +23,22 @@ function verifyToken(token) {
 
 // ── Cookie ───────────────────────────────────────────────────────────────────
 
-/** Construye el string de la cookie Set-Cookie con las flags de seguridad */
 function buildSetCookie(token) {
-  const maxAge = 365 * 24 * 60 * 60; // 1 año en segundos
+  const maxAge = 365 * 24 * 60 * 60;
   return [
     `${COOKIE_NAME}=${token}`,
     `Max-Age=${maxAge}`,
     'Path=/',
     'HttpOnly',
     'SameSite=Strict',
-    // Secure solo en producción — en local.settings.json HTTPS no está activo
     process.env.NODE_ENV !== 'development' ? 'Secure' : '',
   ].filter(Boolean).join('; ');
 }
 
-/** Cookie vacía con Max-Age=0 para hacer logout */
 function buildClearCookie() {
   return `${COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict`;
 }
 
-/** Lee el JWT desde el header Cookie de la request */
 function getTokenFromRequest(req) {
   const cookieHeader = req.headers?.cookie || '';
   const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`));
@@ -59,7 +55,7 @@ function generateConfirmToken() {
 
 async function sendConfirmEmail({ to, name, token }) {
   const RESEND_KEY = process.env.RESEND_KEY;
-  const SITE_URL   = (process.env.SITE_URL || 'https://toval-tech.com').replace(/\/$/, '');
+  const SITE_URL   = (process.env.SITE_URL || 'https://www.tovaltech.com.ar').replace(/\/$/, '');
 
   if (!RESEND_KEY) throw new Error('RESEND_KEY no configurado');
 
@@ -79,12 +75,16 @@ async function sendConfirmEmail({ to, name, token }) {
           <td style="background:#2563eb;padding:28px 32px;">
             <table cellpadding="0" cellspacing="0">
               <tr>
-                <td style="background:rgba(255,255,255,.15);border-radius:8px;padding:8px;width:36px;height:36px;text-align:center;vertical-align:middle;">
-                  <span style="color:#fff;font-size:18px;">⚡</span>
+                <td style="background:rgba(255,255,255,.15);border-radius:8px;padding:8px 10px;text-align:center;vertical-align:middle;">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="6" height="6" rx="1"/>
+                    <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>
+                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                  </svg>
                 </td>
                 <td style="padding-left:12px;">
                   <span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-.3px;">
-                    Toval<span style="opacity:.85">Tech</span>
+                    Toval<span style="color:rgba(255,255,255,.75)">Tech</span>
                   </span>
                 </td>
               </tr>
@@ -116,7 +116,7 @@ async function sendConfirmEmail({ to, name, token }) {
         <tr>
           <td style="padding:20px 32px;border-top:1px solid #f3f4f6;">
             <p style="margin:0;font-size:12px;color:#d1d5db;text-align:center;">
-              © ${new Date().getFullYear()} TovalTech · Buenos Aires, Argentina
+              © ${new Date().getFullYear()} TovalTech · Buenos Aires, Argentina · <a href="https://www.tovaltech.com.ar" style="color:#d1d5db;">tovaltech.com.ar</a>
             </p>
           </td>
         </tr>
@@ -134,7 +134,7 @@ async function sendConfirmEmail({ to, name, token }) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from:    'TovalTech <no-reply@toval-tech.com>',
+      from:    'TovalTech <no-reply@tovaltech.com.ar>',
       to:      [to],
       subject: 'Confirmá tu cuenta en TovalTech',
       html,
